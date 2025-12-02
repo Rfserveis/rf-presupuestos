@@ -202,7 +202,7 @@ const RFQuoteSystem = () => {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-800">RF Serveis - Pressupostos</h1>
-                  <p className="text-sm text-gray-600">Benvingut/da, {currentUser?.nombre}</p>
+                  <p className="text-sm text-gray-600">Benvingut/da, {currentUser?.name}</p>
                 </div>
               </div>
               
@@ -308,9 +308,9 @@ const RFQuoteSystem = () => {
                               </span>
                             </div>
                             <div className="flex gap-4 text-sm text-gray-600">
-                              <span>📁 {cat?.nombre}</span>
+                              <span>📁 {cat?.name}</span>
                               <span>📅 {fecha}</span>
-                              <span>👤 {p.created_by_user?.nombre}</span>
+                              <span>👤 {p.created_by_user?.name}</span>
                               <span>📦 {p.items?.length || 0} items</span>
                             </div>
                           </div>
@@ -372,7 +372,7 @@ const RFQuoteSystem = () => {
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{categoria?.icon}</span>
                   <div>
-                    <h1 className="text-2xl font-bold">{categoria?.nombre}</h1>
+                    <h1 className="text-2xl font-bold">{categoria?.name}</h1>
                     <p className="text-white/90 text-sm">Pressupost #{currentPresupuesto.numero} - {currentPresupuesto.nombre_cliente}</p>
                   </div>
                 </div>
@@ -385,7 +385,7 @@ const RFQuoteSystem = () => {
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
             <div className="text-8xl mb-6">🚧</div>
             <h2 className="text-3xl font-bold text-gray-800 mb-4">Categoria en Desenvolupament</h2>
-            <p className="text-gray-600">El mòdul de {categoria?.nombre} estarà disponible properament</p>
+            <p className="text-gray-600">El mòdul de {categoria?.name} estarà disponible properament</p>
           </div>
         </div>
       </div>
