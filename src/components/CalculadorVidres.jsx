@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { calcularPreuVidre, getProveidors } from '../services/vidres';
 
 const CalculadorVidres = () => {
   // Estats del formulari
@@ -6,7 +7,7 @@ const CalculadorVidres = () => {
     amplada: '',
     alcada: '',
     quantitat: 1,
-    forma: 'recte' // recte o inclinat
+    forma: 'recte'
   });
 
   const [vidre, setVidre] = useState({
@@ -28,11 +29,27 @@ const CalculadorVidres = () => {
   const [resultat, setResultat] = useState({
     m2Unitat: 0,
     m2Total: 0,
-    perimetreUnitat: 0,
-    preuBase: 0,
-    preuProcessos: 0,
-    preuTotal: 0
+    perimetreUnitat: 0
   });
+
+  const [pressupost, setPressupost] = useState(null);
+  const [calculant, setCalculant] = useState(false);
+  const [error, setError] = useState('');
+  const [proveidorsDisponibles, setProveidorsDisponibles] = useState([]);
+
+  // Carregar proveïdors al iniciar
+  useEffect(() => {
+    carregarProveidors();
+  }, []);
+
+  const carregarProveidors = async () => {
+    try {
+      const proveidors = await getProveidors('vidre');
+      setProveidorsDisponibles(proveidors);
+    } catch (err) {
+      console.error('Error carregant proveïdors:', err);
+    }
+  };
 
   // Opcions de vidre
   const tipusVidre = [
@@ -61,24 +78,22 @@ const CalculadorVidres = () => {
       const amplada = parseFloat(mides.amplada);
       const alcada = parseFloat(mides.alcada);
       
-      // Càlcul m²
       const m2Unitat = (amplada * alcada) / 1000000;
       const m2Total = m2Unitat * parseInt(mides.quantitat || 1);
-      
-      // Càlcul perímetre (en metres)
       const perimetreUnitat = (2 * (amplada + alcada)) / 1000;
       
-      setResultat(prev => ({
-        ...prev,
+      setResultat({
         m2Unitat: m2Unitat.toFixed(4),
         m2Total: m2Total.toFixed(4),
         perimetreUnitat: perimetreUnitat.toFixed(2)
-      }));
+      });
     }
   }, [mides.amplada, mides.alcada, mides.quantitat]);
 
   // Validació forats només per temperats
-  const potFerForats = vidre.tipus === 'Temperat' || vidre.tipus === 'Laminat/Temperat' || vidre.tipus === 'Laminat Sentry Glass';
+  const potFerForats = vidre.tipus === 'Temperat' || 
+                       vidre.tipus === 'Laminat/Temperat' || 
+                       vidre.tipus === 'Laminat Sentry Glass';
 
   // Obtenir opcions de gruix segons el tipus
   const getOpcionsGruix = () => {
@@ -90,9 +105,73 @@ const CalculadorVidres = () => {
     return [];
   };
 
+  // Validar formulari
+  const validarFormulari = () => {
+    if (!mides.amplada || !mides.alcada) {
+      setError('Falten les mides del vidre');
+      return false;
+    }
+    if (!vidre.tipus || !vidre.gruix || !vidre.color) {
+      setError('Falta seleccionar el tipus, gruix o color del vidre');
+      return false;
+    }
+    if (processos.forats && (!processos.quantitatForats || !processos.diametreForats)) {
+      setError('Si vols forats, especifica quantitat i diàmetre');
+      return false;
+    }
+    if (processos.puntes && !processos.quantitatPuntes) {
+      setError('Si vols puntes, especifica la quantitat');
+      return false;
+    }
+    return true;
+  };
+
+  // Calcular preu
   const handleCalcular = async () => {
-    // TODO: Calcular preu real des de la base de dades
-    alert('Càlcul en desenvolupament - Properament!');
+    setError('');
+    
+    if (!validarFormulari()) {
+      return;
+    }
+
+    setCalculant(true);
+    
+    try {
+      const configuracio = {
+        amplada: parseFloat(mides.amplada),
+        alcada: parseFloat(mides.alcada),
+        quantitat: parseInt(mides.quantitat),
+        forma: mides.forma,
+        tipus: vidre.tipus,
+        gruix: vidre.gruix,
+        color: vidre.color,
+        proveidor: vidre.proveidor,
+        cantos: processos.cantos,
+        puntes: processos.puntes,
+        quantitatPuntes: parseInt(processos.quantitatPuntes) || 0,
+        forats: processos.forats,
+        quantitatForats: parseInt(processos.quantitatForats) || 0,
+        diametreForats: processos.diametreForats
+      };
+
+      const resultatCalcul = await calcularPreuVidre(configuracio);
+      setPressupost(resultatCalcul);
+      
+    } catch (err) {
+      console.error('Error calculant:', err);
+      setError(err.message || 'Error calculant el pressupost. Comprova que el vidre existeix a la base de dades.');
+    } finally {
+      setCalculant(false);
+    }
+  };
+
+  // Netejar formulari
+  const handleNetejar = () => {
+    setMides({ amplada: '', alcada: '', quantitat: 1, forma: 'recte' });
+    setVidre({ tipus: '', gruix: '', color: '', proveidor: 'Vallesglass' });
+    setProcessos({ cantos: false, puntes: false, quantitatPuntes: 0, forats: false, quantitatForats: 0, diametreForats: '' });
+    setPressupost(null);
+    setError('');
   };
 
   return (
@@ -101,6 +180,14 @@ const CalculadorVidres = () => {
         🪟 Calculador de Vidres
       </h1>
 
+      {/* Missatge d'error */}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded">
+          <p className="font-semibold">⚠️ Error</p>
+          <p>{error}</p>
+        </div>
+      )}
+
       {/* SECCIÓ 1: MIDES */}
       <div className="mb-6 p-4 bg-blue-50 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-blue-800">1. Mides</h2>
@@ -108,7 +195,7 @@ const CalculadorVidres = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amplada (mm)
+              Amplada (mm) *
             </label>
             <input
               type="number"
@@ -121,7 +208,7 @@ const CalculadorVidres = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Alçada (mm)
+              Alçada (mm) *
             </label>
             <input
               type="number"
@@ -198,7 +285,22 @@ const CalculadorVidres = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipus
+              Proveïdor *
+            </label>
+            <select
+              value={vidre.proveidor}
+              onChange={(e) => setVidre({...vidre, proveidor: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+            >
+              {proveidorsDisponibles.map(prov => (
+                <option key={prov.id} value={prov.nom}>{prov.nom}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tipus *
             </label>
             <select
               value={vidre.tipus}
@@ -214,7 +316,7 @@ const CalculadorVidres = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Gruix
+              Gruix *
             </label>
             <select
               value={vidre.gruix}
@@ -231,7 +333,7 @@ const CalculadorVidres = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Color
+              Color *
             </label>
             <select
               value={vidre.color}
@@ -242,21 +344,6 @@ const CalculadorVidres = () => {
               {colors.map(color => (
                 <option key={color} value={color}>{color}</option>
               ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Proveïdor
-            </label>
-            <select
-              value={vidre.proveidor}
-              onChange={(e) => setVidre({...vidre, proveidor: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
-            >
-              <option value="Vallesglass">Vallesglass</option>
-              <option value="Baros Vision" disabled>Baros Vision (Pròximament)</option>
-              <option value="Control Glass" disabled>Control Glass (Pròximament)</option>
             </select>
           </div>
         </div>
@@ -358,42 +445,79 @@ const CalculadorVidres = () => {
         </div>
       </div>
 
-      {/* RESUM */}
-      <div className="p-6 bg-gray-50 rounded-lg border-2 border-gray-300">
-        <h2 className="text-2xl font-bold mb-4 text-gray-800">📊 Resum del Pressupost</h2>
-        
-        <div className="space-y-2 mb-4">
-          <div className="flex justify-between text-lg">
-            <span>Vidre base:</span>
-            <span className="font-semibold">--- €</span>
+      {/* RESUM DEL PRESSUPOST */}
+      {pressupost && (
+        <div className="mb-6 p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
+          <h2 className="text-2xl font-bold mb-4 text-blue-800">📊 Pressupost Calculat</h2>
+          
+          <div className="bg-white p-4 rounded-lg mb-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Vidre:</h3>
+            <p className="text-sm text-gray-600">{pressupost.vidre.nom}</p>
+            <p className="text-sm text-gray-600">Referència: {pressupost.vidre.referencia}</p>
+            <div className="mt-2 text-sm">
+              <p>Preu llista: {pressupost.vidre.preuLlista.toFixed(2)} €/m²</p>
+              <p className="text-green-600">Descompte: {pressupost.vidre.descompte}%</p>
+              <p className="font-semibold">Preu net: {pressupost.vidre.preuNetM2.toFixed(2)} €/m²</p>
+            </div>
           </div>
-          <div className="flex justify-between text-lg">
-            <span>Processos:</span>
-            <span className="font-semibold">--- €</span>
+
+          <div className="bg-white p-4 rounded-lg mb-4">
+            <h3 className="font-semibold text-gray-700 mb-2">Mides:</h3>
+            <p className="text-sm">{pressupost.mides.amplada} × {pressupost.mides.alcada} mm</p>
+            <p className="text-sm">{pressupost.mides.m2Unitat} m² × {pressupost.mides.quantitat} unitats = {pressupost.mides.m2Total} m²</p>
           </div>
-          <div className="border-t-2 border-gray-400 pt-2 flex justify-between text-2xl font-bold text-blue-600">
-            <span>TOTAL:</span>
-            <span>--- €</span>
+
+          {pressupost.detallProcessos.length > 0 && (
+            <div className="bg-white p-4 rounded-lg mb-4">
+              <h3 className="font-semibold text-gray-700 mb-2">Processos:</h3>
+              {pressupost.detallProcessos.map((proc, idx) => (
+                <div key={idx} className="text-sm flex justify-between py-1">
+                  <span>{proc.tipus}: {proc.quantitat} {proc.unitat} × {proc.preuUnitat.toFixed(2)} €</span>
+                  <span className="font-semibold">{proc.total.toFixed(2)} €</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="bg-blue-600 text-white p-4 rounded-lg">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-lg">Vidre base:</span>
+              <span className="text-xl font-bold">{pressupost.preus.base} €</span>
+            </div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-lg">Processos:</span>
+              <span className="text-xl font-bold">{pressupost.preus.processos} €</span>
+            </div>
+            <div className="border-t-2 border-blue-400 pt-2 flex justify-between items-center">
+              <span className="text-2xl font-bold">TOTAL:</span>
+              <span className="text-3xl font-bold">{pressupost.preus.total} €</span>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="flex gap-3">
-          <button
-            onClick={handleCalcular}
-            className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition"
-          >
-            Calcular Preu
-          </button>
+      {/* BOTONS D'ACCIÓ */}
+      <div className="flex gap-3">
+        <button
+          onClick={handleCalcular}
+          disabled={calculant}
+          className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {calculant ? 'Calculant...' : '🔢 Calcular Preu'}
+        </button>
+        <button
+          onClick={handleNetejar}
+          className="flex-1 bg-gray-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-600 transition"
+        >
+          🔄 Netejar
+        </button>
+        {pressupost && (
           <button
             className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition"
           >
-            Guardar Pressupost
+            💾 Guardar Pressupost
           </button>
-        </div>
-
-        <p className="mt-4 text-sm text-gray-500 text-center">
-          ℹ️ El càlcul de preus es farà consultantla base de dades de tarifes
-        </p>
+        )}
       </div>
     </div>
   );
