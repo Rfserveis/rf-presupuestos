@@ -9,7 +9,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [vistaActual, setVistaActual] = useState('inici'); // 'inici', 'calculador'
+  const [vistaActual, setVistaActual] = useState('inici');
 
   useEffect(() => {
     checkUser();
@@ -183,37 +183,78 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         {vistaActual === 'inici' && (
           <div className="bg-white rounded-lg shadow-lg p-8">
-            <h2 className="text-3xl font-bold mb-6 text-gray-800">📊 Panell Principal</h2>
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">📊 Crear Nou Pressupost</h2>
+            <p className="text-gray-600 mb-6">Selecciona la categoria del pressupost:</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
-                <div className="text-4xl mb-3">🪟</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {/* Vidres */}
+              <button
+                onClick={() => setVistaActual('calculador')}
+                className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105"
+              >
+                <div className="text-5xl mb-3">🪟</div>
                 <h3 className="text-xl font-bold mb-2">Vidres</h3>
-                <p className="text-blue-100 mb-4">Catàleg complet de vidres</p>
-                <button
-                  onClick={() => setVistaActual('calculador')}
-                  className="bg-white text-blue-600 px-4 py-2 rounded font-semibold hover:bg-blue-50 transition"
-                >
-                  Calcular Pressupost
-                </button>
+                <p className="text-blue-100 text-sm">Catàleg complet de vidres</p>
+              </button>
+
+              {/* Barandilla All Glass */}
+              <div className="bg-gradient-to-br from-purple-400 to-purple-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
+                <div className="text-5xl mb-3">🛡️</div>
+                <h3 className="text-xl font-bold mb-2">Barandilla All Glass</h3>
+                <p className="text-purple-100 text-sm">Pròximament</p>
+                <span className="inline-block mt-2 bg-yellow-400 text-purple-900 text-xs font-bold px-2 py-1 rounded">
+                  PRÒXIMAMENT
+                </span>
               </div>
 
-              <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg shadow-lg opacity-60">
-                <div className="text-4xl mb-3">☂️</div>
+              {/* Barandilla Top Glass */}
+              <div className="bg-gradient-to-br from-indigo-400 to-indigo-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
+                <div className="text-5xl mb-3">🔒</div>
+                <h3 className="text-xl font-bold mb-2">Barandilla Top Glass</h3>
+                <p className="text-indigo-100 text-sm">Pròximament</p>
+                <span className="inline-block mt-2 bg-yellow-400 text-indigo-900 text-xs font-bold px-2 py-1 rounded">
+                  PRÒXIMAMENT
+                </span>
+              </div>
+
+              {/* Marquesines */}
+              <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
+                <div className="text-5xl mb-3">☂️</div>
                 <h3 className="text-xl font-bold mb-2">Marquesines</h3>
-                <p className="text-purple-100 mb-4">Pròximament</p>
-                <button disabled className="bg-white text-purple-600 px-4 py-2 rounded font-semibold opacity-50 cursor-not-allowed">
-                  Pròximament
-                </button>
+                <p className="text-orange-100 text-sm">Pròximament</p>
+                <span className="inline-block mt-2 bg-yellow-400 text-orange-900 text-xs font-bold px-2 py-1 rounded">
+                  PRÒXIMAMENT
+                </span>
               </div>
 
-              <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg opacity-60">
-                <div className="text-4xl mb-3">🛡️</div>
-                <h3 className="text-xl font-bold mb-2">Baranes</h3>
-                <p className="text-green-100 mb-4">Pròximament</p>
-                <button disabled className="bg-white text-green-600 px-4 py-2 rounded font-semibold opacity-50 cursor-not-allowed">
-                  Pròximament
-                </button>
+              {/* Escaleras D'opera */}
+              <div className="bg-gradient-to-br from-teal-400 to-teal-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
+                <div className="text-5xl mb-3">🪜</div>
+                <h3 className="text-xl font-bold mb-2">Escaleras D'opera</h3>
+                <p className="text-teal-100 text-sm">Pròximament</p>
+                <span className="inline-block mt-2 bg-yellow-400 text-teal-900 text-xs font-bold px-2 py-1 rounded">
+                  PRÒXIMAMENT
+                </span>
+              </div>
+
+              {/* Escaleras RF */}
+              <div className="bg-gradient-to-br from-cyan-400 to-cyan-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
+                <div className="text-5xl mb-3">📐</div>
+                <h3 className="text-xl font-bold mb-2">Escaleras RF</h3>
+                <p className="text-cyan-100 text-sm">Pròximament</p>
+                <span className="inline-block mt-2 bg-yellow-400 text-cyan-900 text-xs font-bold px-2 py-1 rounded">
+                  PRÒXIMAMENT
+                </span>
+              </div>
+
+              {/* Escaleras Escamoteables - NOU! */}
+              <div className="bg-gradient-to-br from-amber-400 to-amber-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
+                <div className="text-5xl mb-3">🪜</div>
+                <h3 className="text-xl font-bold mb-2">Escaleras Escamoteables</h3>
+                <p className="text-amber-100 text-sm">Pròximament</p>
+                <span className="inline-block mt-2 bg-yellow-400 text-amber-900 text-xs font-bold px-2 py-1 rounded">
+                  PRÒXIMAMENT
+                </span>
               </div>
             </div>
 
@@ -223,7 +264,8 @@ function App() {
                 <li>✅ Login funcional</li>
                 <li>✅ Base de dades configurada</li>
                 <li>✅ Tarifes Vallesglass importades</li>
-                <li>🔄 Calculador de vidres en desenvolupament</li>
+                <li>✅ Calculador de vidres operatiu</li>
+                <li>🔄 7 categories disponibles (1 activa, 6 pròximament)</li>
               </ul>
             </div>
           </div>
