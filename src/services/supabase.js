@@ -1,6 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lwtsdtjiwfvurquddfqd.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dHNkdGppd2Z2dXJxdWRkZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1ODMwNTIsImV4cCI6MjA4MDE1OTA1Mn0.aE9OqNLORZs1HhQsjfqNymabkNQJizAkwVanx0D19NU';
+// ❗️ POSA AQUI les teves dades REALS i oblida variables d'entorn
+const supabaseUrl = "https://ELTEUPROJECTE.supabase.co"
+const supabaseAnonKey = "ELATEVAKEYPUBLICA"
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
