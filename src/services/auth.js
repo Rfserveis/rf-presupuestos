@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 export const authService = {
   async login(email, code) {
     if (code !== 'RF123') {
-      throw new Error('Codi d\'accés incorrecte')
+      throw new Error("Codi d'accés incorrecte")
     }
 
     const { data: user, error } = await supabase
@@ -27,5 +27,5 @@ export const authService = {
 
   logout() {
     localStorage.removeItem('rfAuthUser')
-  }
+  },
 }
