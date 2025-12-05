@@ -1,8 +1,20 @@
 {
-  "build": {
-    "env": {
-      "VITE_SUPABASE_URL": "@vite-supabase-url",
-      "VITE_SUPABASE_ANON_KEY": "@vite-supabase-anon-key"
-    }
-  }
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install"
 }
+```
+
+4. **Commit:** "Simplify Vercel config"
+
+---
+
+## ✅ PAS 4: Forçar rebuild
+
+1. **Ves a:** https://github.com/Rfserveis/rf-presupuestos/blob/main/README.md
+
+2. **Edita'l i afegeix una línia:**
+```
+   
+   Actualització: 05/12/2025 - Sistema de vidres operatiu
