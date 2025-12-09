@@ -143,20 +143,15 @@ RF Serveis - Pressupostos
                     <li>7 categories disponibles (1 activa, 6 pròximament)</li>
                   </ul>
                 </section>
-              </div>
-            )}
+             </div>
+        )}
 
-            {vistaActual === 'calculador' && <CalculadorVidres />}
-          </main>
-        </>
-      ) : (
-        // SI ÉS USUARI: només el calculador
-        <main className="max-w-6xl mx-auto px-4 py-6">
+        {vistaActual === 'calculador' && (
           <CalculadorVidres />
-        </main>
-      )}
+        )}
+      </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
