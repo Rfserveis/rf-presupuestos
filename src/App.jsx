@@ -7,7 +7,7 @@ import { traductiones as t } from './locales/es';
 function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState('usuario');
+  const [selectedRole, setSelectedRole] = useState('user');
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -18,22 +18,13 @@ function App() {
   }, []);
 
   const checkUser = async () => {
-  try {
-    const user = await getCurrentUser();
-    setCurrentUser(user);
-    if (user && user.role === 'admin') {
-      setVistaActual('admin');
-    } else if (user) {
-      setVistaActual('inicio');
-    }
-  } catch (err) {
-    console.error('Error verificando usuario:', err);
-  } finally {
-    setLoading(false);
-  }
-};
-      // Los usuarios normales van a inicio, no al calculador
-      if (user && !isAdmin(user)) {
+    try {
+      const user = await getCurrentUser();
+      setCurrentUser(user);
+      // Los admins van directo al panel, usuarios a inicio
+      if (user && user.role === 'admin') {
+        setVistaActual('admin');
+      } else if (user) {
         setVistaActual('inicio');
       }
     } catch (err) {
@@ -50,21 +41,24 @@ function App() {
 
     try {
       const { user, profile } = await signIn(email, password);
-      // Asignar el rol seleccionado en el formulario
       const userWithRole = {
         ...profile,
-        rol: selectedRole
+        role: selectedRole === 'admin' ? 'admin' : 'user'
       };
       setCurrentUser(userWithRole);
-      // Guardar el rol en localStorage también
       localStorage.setItem('rfAuthUser', JSON.stringify(userWithRole));
       setEmail('');
       setPassword('');
-      setSelectedRole('usuario');
-      // Redirigir a inicio después del login
-      setVistaActual('inicio');
+      setSelectedRole('user');
+      
+      // Redirigir según rol
+      if (userWithRole.role === 'admin') {
+        setVistaActual('admin');
+      } else {
+        setVistaActual('inicio');
+      }
     } catch (err) {
-      setError(err.message || t.auth.errorAutenticacion);
+      setError(err.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -85,7 +79,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">{t.auth.cargando}</p>
+          <p className="mt-4 text-gray-600">Cargando...</p>
         </div>
       </div>
     );
@@ -100,22 +94,22 @@ function App() {
             <div className="bg-blue-600 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-4xl">🪟</span>
             </div>
-            <h1 className="text-3xl font-bold text-gray-800">{t.auth.titulo}</h1>
-            <p className="text-gray-600 mt-2">{t.auth.subtitulo}</p>
+            <h1 className="text-3xl font-bold text-gray-800">RF Serveis</h1>
+            <p className="text-gray-600 mt-2">Presupuestos</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t.auth.email}
+                Email
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={t.auth.emailPlaceholder}
+                placeholder="demo@rfserveis.com"
                 required
               />
             </div>
@@ -123,14 +117,14 @@ function App() {
             {/* Contraseña */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t.auth.contrasena}
+                Contraseña
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder={t.auth.contrasenaPlaceholder}
+                placeholder="••••••••"
                 required
               />
             </div>
@@ -138,18 +132,18 @@ function App() {
             {/* Selección de Rol */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t.header.rol}
+                Rol
               </label>
               <select
                 value={selectedRole}
                 onChange={(e) => setSelectedRole(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="usuario">👤 {t.header.usuario}</option>
-                <option value="admin">👨‍💼 {t.header.administrador}</option>
+                <option value="user">👤 Usuario</option>
+                <option value="admin">👨‍💼 Administrador</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                {selectedRole === 'usuario' 
+                {selectedRole === 'user' 
                   ? '📊 Acceso a Calculador de Vidrios'
                   : '⚙️ Acceso a Panel de Administración'
                 }
@@ -167,16 +161,16 @@ function App() {
               disabled={loading}
               className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? t.auth.entrando : t.auth.entrar}
+              {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
 
           <div className="mt-6 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
             <p className="font-semibold mb-2">🔐 Datos de prueba:</p>
             <p>Email: demo@rfserveis.com</p>
-            <p>Pass: demo123</p>
+            <p>Pass: cualquiera</p>
             <p className="mt-2 text-xs text-gray-600">
-              (Selecciona el rol que deseas usar abajo)
+              (Selecciona el rol que deseas usar)
             </p>
           </div>
         </div>
@@ -195,12 +189,12 @@ function App() {
               <span className="text-2xl">🪟</span>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">RF Serveis - {t.auth.subtitulo}</h1>
+              <h1 className="text-2xl font-bold text-gray-800">RF Serveis - Presupuestos</h1>
               <p className="text-sm text-gray-600">
-                {t.header.bienvenida} {currentUser.nombre} 
+                Bienvenido/a {currentUser.name}
                 {isAdmin(currentUser) && (
                   <span className="ml-2 bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-semibold">
-                    👨‍💼 {t.header.administrador}
+                    👨‍💼 Administrador
                   </span>
                 )}
               </p>
@@ -210,7 +204,7 @@ function App() {
             onClick={handleLogout}
             className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition font-semibold"
           >
-            {t.auth.salir}
+            Salir
           </button>
         </div>
       </header>
@@ -227,7 +221,7 @@ function App() {
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              🏠 {t.nav.inicio}
+              🏠 Inicio
             </button>
 
             {/* Solo usuarios normales ven el calculador */}
@@ -240,7 +234,7 @@ function App() {
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                🪟 {t.nav.calculadorVidres}
+                🪟 Calculador de Vidrios
               </button>
             )}
 
@@ -248,7 +242,7 @@ function App() {
               className="px-6 py-3 text-gray-400 cursor-not-allowed"
               disabled
             >
-              📋 {t.nav.presupuestos} ({t.nav.proximamente})
+              📋 Presupuestos (Próximamente)
             </button>
 
             {/* Solo admins ven el panel de administración */}
@@ -261,7 +255,7 @@ function App() {
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                ⚙️ {t.nav.panelAdmin}
+                ⚙️ Panel de Administración
               </button>
             )}
           </div>
@@ -273,8 +267,8 @@ function App() {
         {/* VISTA: INICIO */}
         {vistaActual === 'inicio' && (
           <div className="bg-white rounded-lg shadow-lg p-8">
-            <h2 className="text-3xl font-bold mb-6 text-gray-800">📊 {t.home.titulo}</h2>
-            <p className="text-gray-600 mb-6">{t.home.descripcion}</p>
+            <h2 className="text-3xl font-bold mb-6 text-gray-800">📊 Crear Nuevo Presupuesto</h2>
+            <p className="text-gray-600 mb-6">Selecciona la categoría del presupuesto:</p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {/* Solo mostrar calculador si no es admin */}
@@ -284,67 +278,67 @@ function App() {
                   className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105"
                 >
                   <div className="text-5xl mb-3">🪟</div>
-                  <h3 className="text-xl font-bold mb-2">{t.home.vidrios}</h3>
-                  <p className="text-blue-100 text-sm">{t.home.catalogoCompleto}</p>
+                  <h3 className="text-xl font-bold mb-2">Vidrios</h3>
+                  <p className="text-blue-100 text-sm">Catálogo completo</p>
                 </button>
               )}
 
               <div className="bg-gradient-to-br from-purple-400 to-purple-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
                 <div className="text-5xl mb-3">🛡️</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.barandillaAllGlass}</h3>
-                <p className="text-purple-100 text-sm">{t.nav.proximamente}</p>
+                <h3 className="text-xl font-bold mb-2">Barandilla All Glass</h3>
+                <p className="text-purple-100 text-sm">Próximamente</p>
               </div>
 
               <div className="bg-gradient-to-br from-indigo-400 to-indigo-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
                 <div className="text-5xl mb-3">🔒</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.barandillaTopGlass}</h3>
-                <p className="text-indigo-100 text-sm">{t.nav.proximamente}</p>
+                <h3 className="text-xl font-bold mb-2">Barandilla Top Glass</h3>
+                <p className="text-indigo-100 text-sm">Próximamente</p>
               </div>
 
               <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
                 <div className="text-5xl mb-3">☂️</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.marquesinas}</h3>
-                <p className="text-orange-100 text-sm">{t.nav.proximamente}</p>
+                <h3 className="text-xl font-bold mb-2">Marquesinas</h3>
+                <p className="text-orange-100 text-sm">Próximamente</p>
               </div>
 
               <div className="bg-gradient-to-br from-teal-400 to-teal-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
                 <div className="text-5xl mb-3">🪜</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.escalerasOpera}</h3>
-                <p className="text-teal-100 text-sm">{t.nav.proximamente}</p>
+                <h3 className="text-xl font-bold mb-2">Escaleras D'opera</h3>
+                <p className="text-teal-100 text-sm">Próximamente</p>
               </div>
 
               <div className="bg-gradient-to-br from-cyan-400 to-cyan-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
                 <div className="text-5xl mb-3">📐</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.escalerasRF}</h3>
-                <p className="text-cyan-100 text-sm">{t.nav.proximamente}</p>
+                <h3 className="text-xl font-bold mb-2">Escaleras RF</h3>
+                <p className="text-cyan-100 text-sm">Próximamente</p>
               </div>
 
               <div className="bg-gradient-to-br from-amber-400 to-amber-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
                 <div className="text-5xl mb-3">🪜</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.escalerasRetractiles}</h3>
-                <p className="text-amber-100 text-sm">{t.nav.proximamente}</p>
+                <h3 className="text-xl font-bold mb-2">Escaleras Retráctiles</h3>
+                <p className="text-amber-100 text-sm">Próximamente</p>
               </div>
             </div>
 
             <div className="mt-8 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-              <h4 className="font-bold text-blue-800 mb-2">ℹ️ {t.home.estadoSistema}</h4>
+              <h4 className="font-bold text-blue-800 mb-2">ℹ️ Estado del Sistema</h4>
               <ul className="space-y-1 text-sm text-blue-700">
-                <li>✅ {t.home.loginFuncional}</li>
-                <li>✅ {t.home.baseDatosCofigurada}</li>
-                <li>✅ {t.home.tarifasImportadas}</li>
-                <li>✅ {t.home.calculadorOperativo}</li>
-                <li>🔄 {t.home.categoriasDisponibles}</li>
+                <li>✅ Login funcional</li>
+                <li>✅ Base de datos configurada</li>
+                <li>✅ Tarifas importadas</li>
+                <li>✅ Calculador operativo</li>
+                <li>✅ 7 categorías disponibles</li>
               </ul>
             </div>
           </div>
         )}
 
-        {/* VISTA: CALCULADOR DE VIDRIOS */}
+        {/* VISTA: CALCULADOR */}
         {vistaActual === 'calculador' && !isAdmin(currentUser) && (
           <CalculadorVidres />
         )}
 
-        {/* VISTA: PANEL DE ADMINISTRACIÓN */}
+        {/* VISTA: PANEL ADMIN */}
         {vistaActual === 'admin' && isAdmin(currentUser) && (
           <AdminPanel />
         )}
