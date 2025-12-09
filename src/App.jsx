@@ -21,6 +21,11 @@ function App() {
     try {
       const user = await getCurrentUser();
       setCurrentUser(user);
+      if (user && user.role === 'admin') {
+  setVistaActual('admin');
+} else if (user) {
+  setVistaActual('inicio');
+}
       // Los usuarios normales van a inicio, no al calculador
       if (user && !isAdmin(user)) {
         setVistaActual('inicio');
