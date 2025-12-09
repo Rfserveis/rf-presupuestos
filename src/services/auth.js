@@ -1,63 +1,28 @@
-import { supabase } from './supabase';
+const USERS_DB = [
+  { id: '1', email: 'demo@rfserveis.com', name: 'Usuario Demo', role: 'user' },
+  { id: '2', email: 'admin@rfserveis.com', name: 'Admin Demo', role: 'admin' }
+];
 
 export const signIn = async (email, password) => {
-  try {
-    // Validar contra tabla users
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
-
-    if (error || !user) {
-      throw new Error('Email o contraseña incorrectos');
-    }
-
-    // Aquí puedes agregar validación de contraseña si la tienes en BD
-    // Por ahora, solo verificamos que el usuario existe
-    
-    return {
-      user: user.id,
-      profile: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.rol
-      }
-    };
-  } catch (err) {
-    throw err;
+  const user = USERS_DB.find(u => u.email === email);
+  
+  if (!user) {
+    throw new Error('Usuario no encontrado');
   }
+
+  return {
+    user: user.id,
+    profile: user
+  };
 };
 
 export const signOut = async () => {
-  try {
-    await supabase.auth.signOut();
-  } catch (err) {
-    console.error('Error signing out:', err);
-  }
+  localStorage.removeItem('rfAuthUser');
 };
 
 export const getCurrentUser = async () => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
-    const { data: profile } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', user.email)
-      .single();
-
-    return {
-      id: user.id,
-      email: user.email,
-      name: profile?.name || user.user_metadata?.name,
-      role: profile?.rol || 'user'
-    };
-  } catch (err) {
-    return null;
-  }
+  const stored = localStorage.getItem('rfAuthUser');
+  return stored ? JSON.parse(stored) : null;
 };
 
 export const isAdmin = (user) => {
@@ -65,5 +30,5 @@ export const isAdmin = (user) => {
 };
 
 export const isUsuario = (user) => {
-  return user?.role === 'user' || user?.role === 'usuario';
+  return user?.role === 'user';
 };
