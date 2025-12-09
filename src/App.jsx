@@ -18,14 +18,20 @@ function App() {
   }, []);
 
   const checkUser = async () => {
-    try {
-      const user = await getCurrentUser();
-      setCurrentUser(user);
-      if (user && user.role === 'admin') {
-  setVistaActual('admin');
-} else if (user) {
-  setVistaActual('inicio');
-}
+  try {
+    const user = await getCurrentUser();
+    setCurrentUser(user);
+    if (user && user.role === 'admin') {
+      setVistaActual('admin');
+    } else if (user) {
+      setVistaActual('inicio');
+    }
+  } catch (err) {
+    console.error('Error verificando usuario:', err);
+  } finally {
+    setLoading(false);
+  }
+};
       // Los usuarios normales van a inicio, no al calculador
       if (user && !isAdmin(user)) {
         setVistaActual('inicio');
