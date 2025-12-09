@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { calcularPreuVidre, getProveidors } from '../services/vidres';
+import { traductiones as t } from '../locales/es';
 
 const CalculadorVidres = () => {
-  // Estats del formulari
   const [mides, setMides] = useState({
     amplada: '',
     alcada: '',
@@ -37,7 +37,6 @@ const CalculadorVidres = () => {
   const [error, setError] = useState('');
   const [proveidorsDisponibles, setProveidorsDisponibles] = useState([]);
 
-  // Carregar proveïdors al iniciar
   useEffect(() => {
     carregarProveidors();
   }, []);
@@ -47,32 +46,31 @@ const CalculadorVidres = () => {
       const proveidors = await getProveidors('vidre');
       setProveidorsDisponibles(proveidors);
     } catch (err) {
-      console.error('Error carregant proveïdors:', err);
+      console.error('Error cargando proveedores:', err);
+      setError(t.calculador.errorCargarProveedores);
     }
   };
 
-  // Opcions de vidre
   const tipusVidre = [
-    'Float / Monolític',
-    'Laminat',
-    'Temperat',
-    'Laminat/Temperat',
-    'Laminat Sentry Glass'
+    t.calculador.floatMonolitico,
+    t.calculador.laminado,
+    t.calculador.temperat,
+    t.calculador.laminadoTemperat,
+    t.calculador.laminadoSentryGlass
   ];
 
   const gruixosMonolitic = ['4', '5', '6', '8', '10', '12', '15'];
   const gruixosLaminat = ['3+3', '4+4', '5+5', '6+6', '8+8', '10+10'];
 
   const colors = [
-    'INCOLORO',
-    'VERDE',
-    'GRIS/BRONCE',
-    'MATE',
-    'OPTICO',
-    'GRIS/MATE'
+    t.calculador.incoloro,
+    t.calculador.verde,
+    t.calculador.grisBronce,
+    t.calculador.mate,
+    t.calculador.optico,
+    t.calculador.grisMate
   ];
 
-  // Calcular m² i perímetre automàticament
   useEffect(() => {
     if (mides.amplada && mides.alcada) {
       const amplada = parseFloat(mides.amplada);
@@ -90,43 +88,39 @@ const CalculadorVidres = () => {
     }
   }, [mides.amplada, mides.alcada, mides.quantitat]);
 
-  // Validació forats només per temperats
-  const potFerForats = vidre.tipus === 'Temperat' || 
-                       vidre.tipus === 'Laminat/Temperat' || 
-                       vidre.tipus === 'Laminat Sentry Glass';
+  const potFerForats = vidre.tipus === t.calculador.temperat || 
+                       vidre.tipus === t.calculador.laminadoTemperat || 
+                       vidre.tipus === t.calculador.laminadoSentryGlass;
 
-  // Obtenir opcions de gruix segons el tipus
   const getOpcionsGruix = () => {
-    if (vidre.tipus === 'Float / Monolític' || vidre.tipus === 'Temperat') {
+    if (vidre.tipus === t.calculador.floatMonolitico || vidre.tipus === t.calculador.temperat) {
       return gruixosMonolitic;
-    } else if (vidre.tipus.includes('Laminat')) {
+    } else if (vidre.tipus.includes(t.calculador.laminado)) {
       return gruixosLaminat;
     }
     return [];
   };
 
-  // Validar formulari
   const validarFormulari = () => {
     if (!mides.amplada || !mides.alcada) {
-      setError('Falten les mides del vidre');
+      setError(t.calculador.errorMedidas);
       return false;
     }
     if (!vidre.tipus || !vidre.gruix || !vidre.color) {
-      setError('Falta seleccionar el tipus, gruix o color del vidre');
+      setError(t.calculador.errorEspecificaciones);
       return false;
     }
     if (processos.forats && (!processos.quantitatForats || !processos.diametreForats)) {
-      setError('Si vols forats, especifica quantitat i diàmetre');
+      setError(t.calculador.errorForats);
       return false;
     }
     if (processos.puntes && !processos.quantitatPuntes) {
-      setError('Si vols puntes, especifica la quantitat');
+      setError(t.calculador.errorPuntas);
       return false;
     }
     return true;
   };
 
-  // Calcular preu
   const handleCalcular = async () => {
     setError('');
     
@@ -158,14 +152,13 @@ const CalculadorVidres = () => {
       setPressupost(resultatCalcul);
       
     } catch (err) {
-      console.error('Error calculant:', err);
-      setError(err.message || 'Error calculant el pressupost. Comprova que el vidre existeix a la base de dades.');
+      console.error('Error calculando:', err);
+      setError(err.message || t.calculador.errorCalculador);
     } finally {
       setCalculant(false);
     }
   };
 
-  // Netejar formulari
   const handleNetejar = () => {
     setMides({ amplada: '', alcada: '', quantitat: 1, forma: 'recte' });
     setVidre({ tipus: '', gruix: '', color: '', proveidor: 'Vallesglass' });
@@ -177,115 +170,148 @@ const CalculadorVidres = () => {
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        🪟 Calculador de Vidres
+        🪟 {t.calculador.titulo}
       </h1>
 
-      {/* Missatge d'error */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded">
-          <p className="font-semibold">⚠️ Error</p>
+          <p className="font-semibold">⚠️ {t.mensajes.error}</p>
           <p>{error}</p>
         </div>
       )}
 
-      {/* SECCIÓ 1: MIDES */}
+      {/* SECCIÓN 1: MEDIDAS */}
       <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-blue-800">1. Mides</h2>
+        <h2 className="text-xl font-semibold mb-4 text-blue-800">{t.calculador.seccion1}</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amplada (mm) *
+              {t.calculador.amplada} <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
               value={mides.amplada}
               onChange={(e) => setMides({...mides, amplada: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              placeholder="Ex: 1000"
+              placeholder={t.calculador.amplada_placeholder}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Alçada (mm) *
+              {t.calculador.alcada} <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
               value={mides.alcada}
               onChange={(e) => setMides({...mides, alcada: e.target.value})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              placeholder="Ex: 1500"
+              placeholder={t.calculador.alcada_placeholder}
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Quantitat
+              {t.calculador.quantitat}
             </label>
             <input
               type="number"
               value={mides.quantitat}
-              onChange={(e) => setMides({...mides, quantitat: e.target.value})}
+              onChange={(e) => setMides({...mides, quantitat: parseInt(e.target.value) || 1})}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               min="1"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div className="bg-white p-3 rounded border border-blue-200">
-            <p className="text-sm text-gray-600">m² per unitat:</p>
-            <p className="text-2xl font-bold text-blue-600">{resultat.m2Unitat}</p>
+        <div className="grid grid-cols-2 gap-4 p-3 bg-white rounded border border-blue-200">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.calculador.m2Unidad}
+            </label>
+            <p className="text-lg font-semibold text-blue-600">{resultat.m2Unitat} m²</p>
           </div>
-          <div className="bg-white p-3 rounded border border-blue-200">
-            <p className="text-sm text-gray-600">m² total:</p>
-            <p className="text-2xl font-bold text-blue-600">{resultat.m2Total}</p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.calculador.m2Total}
+            </label>
+            <p className="text-lg font-semibold text-blue-600">{resultat.m2Total} m²</p>
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Forma
+        <div className="mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {t.calculador.forma}
           </label>
-          <div className="flex gap-4">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value="recte"
-                checked={mides.forma === 'recte'}
-                onChange={(e) => setMides({...mides, forma: e.target.value})}
-                className="mr-2"
-              />
-              Recte
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                value="inclinat"
-                checked={mides.forma === 'inclinat'}
-                onChange={(e) => setMides({...mides, forma: e.target.value})}
-                className="mr-2"
-              />
-              Inclinat
-            </label>
-          </div>
-          {mides.forma === 'inclinat' && (
-            <p className="mt-2 text-sm text-orange-600">
-              ⚠️ Recàrrec per vidre inclinat: Pendent de definir
-            </p>
-          )}
+          <select
+            value={mides.forma}
+            onChange={(e) => setMides({...mides, forma: e.target.value})}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="recte">{t.calculador.recte}</option>
+            <option value="inclinat">{t.calculador.inclinat}</option>
+          </select>
         </div>
       </div>
 
-      {/* SECCIÓ 2: TIPUS DE VIDRE */}
+      {/* SECCIÓN 2: ESPECIFICACIONES DEL VIDRIO */}
       <div className="mb-6 p-4 bg-green-50 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-green-800">2. Tipus de Vidre</h2>
+        <h2 className="text-xl font-semibold mb-4 text-green-800">{t.calculador.seccion2}</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Proveïdor *
+              {t.calculador.tipus} <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={vidre.tipus}
+              onChange={(e) => setVidre({...vidre, tipus: e.target.value, gruix: ''})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+            >
+              <option value="">{t.calculador.selectTip}</option>
+              {tipusVidre.map(tipus => (
+                <option key={tipus} value={tipus}>{tipus}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.calculador.gruix} <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={vidre.gruix}
+              onChange={(e) => setVidre({...vidre, gruix: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+              disabled={!vidre.tipus}
+            >
+              <option value="">{t.calculador.selectGruix}</option>
+              {getOpcionsGruix().map(gruix => (
+                <option key={gruix} value={gruix}>{gruix} {t.calculador.mm}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.calculador.color} <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={vidre.color}
+              onChange={(e) => setVidre({...vidre, color: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+            >
+              <option value="">{t.calculador.selectColor}</option>
+              {colors.map(color => (
+                <option key={color} value={color}>{color}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t.calculador.proveidor}
             </label>
             <select
               value={vidre.proveidor}
@@ -297,67 +323,18 @@ const CalculadorVidres = () => {
               ))}
             </select>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipus *
-            </label>
-            <select
-              value={vidre.tipus}
-              onChange={(e) => setVidre({...vidre, tipus: e.target.value, gruix: ''})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
-            >
-              <option value="">Selecciona tipus...</option>
-              {tipusVidre.map(tipus => (
-                <option key={tipus} value={tipus}>{tipus}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Gruix *
-            </label>
-            <select
-              value={vidre.gruix}
-              onChange={(e) => setVidre({...vidre, gruix: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
-              disabled={!vidre.tipus}
-            >
-              <option value="">Selecciona gruix...</option>
-              {getOpcionsGruix().map(gruix => (
-                <option key={gruix} value={gruix}>{gruix} mm</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Color *
-            </label>
-            <select
-              value={vidre.color}
-              onChange={(e) => setVidre({...vidre, color: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
-            >
-              <option value="">Selecciona color...</option>
-              {colors.map(color => (
-                <option key={color} value={color}>{color}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
-        {vidre.tipus === 'Laminat Sentry Glass' && (
+        {vidre.tipus === t.calculador.laminadoSentryGlass && (
           <p className="mt-3 text-sm text-blue-600 bg-blue-100 p-2 rounded">
-            ℹ️ Laminat Sentry Glass sempre és temperat i s'utilitza per marquesines
+            ℹ️ {t.calculador.infoSentryGlass}
           </p>
         )}
       </div>
 
-      {/* SECCIÓ 3: PROCESSOS */}
+      {/* SECCIÓN 3: PROCESOS ADICIONALES */}
       <div className="mb-6 p-4 bg-purple-50 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-purple-800">3. Processos Addicionals</h2>
+        <h2 className="text-xl font-semibold mb-4 text-purple-800">{t.calculador.seccion3}</h2>
         
         {/* Cantos */}
         <div className="mb-4 p-3 bg-white rounded border border-purple-200">
@@ -368,16 +345,19 @@ const CalculadorVidres = () => {
               onChange={(e) => setProcessos({...processos, cantos: e.target.checked})}
               className="mr-2 w-4 h-4"
             />
-            <span className="font-medium">Cantos (perímetre automàtic)</span>
+            <span className="font-medium">{t.calculador.cantosLabel}</span>
           </label>
           {processos.cantos && (
             <p className="text-sm text-gray-600 ml-6">
-              Perímetre: {resultat.perimetreUnitat} ml × {mides.quantitat} = {(parseFloat(resultat.perimetreUnitat) * parseInt(mides.quantitat || 1)).toFixed(2)} ml
+              {t.calculador.cantosDesc
+                .replace('{perimetre}', resultat.perimetreUnitat)
+                .replace('{quantitat}', mides.quantitat)
+                .replace('{total}', (parseFloat(resultat.perimetreUnitat) * parseInt(mides.quantitat || 1)).toFixed(2))}
             </p>
           )}
         </div>
 
-        {/* Puntes */}
+        {/* Puntas */}
         <div className="mb-4 p-3 bg-white rounded border border-purple-200">
           <label className="flex items-center mb-2">
             <input
@@ -386,11 +366,11 @@ const CalculadorVidres = () => {
               onChange={(e) => setProcessos({...processos, puntes: e.target.checked})}
               className="mr-2 w-4 h-4"
             />
-            <span className="font-medium">Puntes (sempre roma polida radi 2mm)</span>
+            <span className="font-medium">{t.calculador.puntasLabel}</span>
           </label>
           {processos.puntes && (
             <div className="ml-6">
-              <label className="block text-sm text-gray-600 mb-1">Quantitat de puntes:</label>
+              <label className="block text-sm text-gray-600 mb-1">{t.calculador.puntasQuantitat}</label>
               <input
                 type="number"
                 value={processos.quantitatPuntes}
@@ -402,7 +382,7 @@ const CalculadorVidres = () => {
           )}
         </div>
 
-        {/* Forats */}
+        {/* Agujeros */}
         <div className="p-3 bg-white rounded border border-purple-200">
           <label className="flex items-center mb-2">
             <input
@@ -413,13 +393,13 @@ const CalculadorVidres = () => {
               disabled={!potFerForats}
             />
             <span className={`font-medium ${!potFerForats ? 'text-gray-400' : ''}`}>
-              Forats/Taladres {!potFerForats && '(només per vidres temperats)'}
+              {t.calculador.foratsLabel} {!potFerForats && `(${t.calculador.foratsDesc})`}
             </span>
           </label>
           {processos.forats && potFerForats && (
             <div className="ml-6 grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Quantitat:</label>
+                <label className="block text-sm text-gray-600 mb-1">{t.calculador.foratsQuantitat}</label>
                 <input
                   type="number"
                   value={processos.quantitatForats}
@@ -429,7 +409,7 @@ const CalculadorVidres = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">Diàmetre (mm):</label>
+                <label className="block text-sm text-gray-600 mb-1">{t.calculador.foratsDiametre}</label>
                 <input
                   type="number"
                   value={processos.diametreForats}
@@ -437,7 +417,7 @@ const CalculadorVidres = () => {
                   className="w-full px-3 py-1 border border-gray-300 rounded-md"
                   min="11"
                   max="40"
-                  placeholder="11-40"
+                  placeholder={t.calculador.foratsPlaceholder}
                 />
               </div>
             </div>
@@ -445,31 +425,31 @@ const CalculadorVidres = () => {
         </div>
       </div>
 
-      {/* RESUM DEL PRESSUPOST */}
+      {/* RESUMEN DEL PRESUPUESTO */}
       {pressupost && (
         <div className="mb-6 p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border-2 border-blue-300">
-          <h2 className="text-2xl font-bold mb-4 text-blue-800">📊 Pressupost Calculat</h2>
+          <h2 className="text-2xl font-bold mb-4 text-blue-800">📊 {t.calculador.seccionResum}</h2>
           
           <div className="bg-white p-4 rounded-lg mb-4">
-            <h3 className="font-semibold text-gray-700 mb-2">Vidre:</h3>
+            <h3 className="font-semibold text-gray-700 mb-2">{t.calculador.vidrio}:</h3>
             <p className="text-sm text-gray-600">{pressupost.vidre.nom}</p>
-            <p className="text-sm text-gray-600">Referència: {pressupost.vidre.referencia}</p>
+            <p className="text-sm text-gray-600">{t.calculador.referencia}: {pressupost.vidre.referencia}</p>
             <div className="mt-2 text-sm">
-              <p>Preu llista: {pressupost.vidre.preuLlista.toFixed(2)} €/m²</p>
-              <p className="text-green-600">Descompte: {pressupost.vidre.descompte}%</p>
-              <p className="font-semibold">Preu net: {pressupost.vidre.preuNetM2.toFixed(2)} €/m²</p>
+              <p>{t.calculador.precioLista}: {pressupost.vidre.preuLlista.toFixed(2)} €/{t.calculador.m2Unidad}</p>
+              <p className="text-green-600">{t.calculador.descuento}: {pressupost.vidre.descompte}%</p>
+              <p className="font-semibold">{t.calculador.precioNeto}: {pressupost.vidre.preuNetM2.toFixed(2)} €/{t.calculador.m2Unidad}</p>
             </div>
           </div>
 
           <div className="bg-white p-4 rounded-lg mb-4">
-            <h3 className="font-semibold text-gray-700 mb-2">Mides:</h3>
+            <h3 className="font-semibold text-gray-700 mb-2">{t.calculador.medidas}:</h3>
             <p className="text-sm">{pressupost.mides.amplada} × {pressupost.mides.alcada} mm</p>
-            <p className="text-sm">{pressupost.mides.m2Unitat} m² × {pressupost.mides.quantitat} unitats = {pressupost.mides.m2Total} m²</p>
+            <p className="text-sm">{pressupost.mides.m2Unitat} m² × {pressupost.mides.quantitat} unidades = {pressupost.mides.m2Total} m²</p>
           </div>
 
           {pressupost.detallProcessos.length > 0 && (
             <div className="bg-white p-4 rounded-lg mb-4">
-              <h3 className="font-semibold text-gray-700 mb-2">Processos:</h3>
+              <h3 className="font-semibold text-gray-700 mb-2">{t.calculador.detalleProcessos}:</h3>
               {pressupost.detallProcessos.map((proc, idx) => (
                 <div key={idx} className="text-sm flex justify-between py-1">
                   <span>{proc.tipus}: {proc.quantitat} {proc.unitat} × {proc.preuUnitat.toFixed(2)} €</span>
@@ -481,41 +461,41 @@ const CalculadorVidres = () => {
 
           <div className="bg-blue-600 text-white p-4 rounded-lg">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-lg">Vidre base:</span>
+              <span className="text-lg">{t.calculador.vidreBase}:</span>
               <span className="text-xl font-bold">{pressupost.preus.base} €</span>
             </div>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-lg">Processos:</span>
+              <span className="text-lg">{t.calculador.procesos}:</span>
               <span className="text-xl font-bold">{pressupost.preus.processos} €</span>
             </div>
             <div className="border-t-2 border-blue-400 pt-2 flex justify-between items-center">
-              <span className="text-2xl font-bold">TOTAL:</span>
+              <span className="text-2xl font-bold">{t.calculador.total}:</span>
               <span className="text-3xl font-bold">{pressupost.preus.total} €</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* BOTONS D'ACCIÓ */}
+      {/* BOTONES */}
       <div className="flex gap-3">
         <button
           onClick={handleCalcular}
           disabled={calculant}
           className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {calculant ? 'Calculant...' : '🔢 Calcular Preu'}
+          {calculant ? t.calculador.calculando : `🔢 ${t.calculador.calcularPrecio}`}
         </button>
         <button
           onClick={handleNetejar}
           className="flex-1 bg-gray-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-600 transition"
         >
-          🔄 Netejar
+          🔄 {t.calculador.limpiar}
         </button>
         {pressupost && (
           <button
             className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition"
           >
-            💾 Guardar Pressupost
+            💾 {t.calculador.guardarPresupuesto}
           </button>
         )}
       </div>
