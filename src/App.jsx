@@ -108,7 +108,6 @@ function App() {
     )
   }
 
-  // DESPRÉS DEL LOGIN: ADMIN vs USUARI
   return (
     <div className="min-h-screen bg-gray-50">
       {/* HEADER */}
@@ -225,55 +224,4 @@ function App() {
                         Escaleras D&apos;opera
                       </h3>
                       <p className="text-sm text-gray-500">Pròximament</p>
-                      <span className="mt-2 inline-block text-xs font-semibold text-gray-400">
-                        PRÒXIMAMENT
-                      </span>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-lg border border-dashed border-gray-300 text-left">
-                      <h3 className="text-lg font-semibold mb-1">Escaleras RF</h3>
-                      <p className="text-sm text-gray-500">Pròximament</p>
-                      <span className="mt-2 inline-block text-xs font-semibold text-gray-400">
-                        PRÒXIMAMENT
-                      </span>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-lg border border-dashed border-gray-300 text-left">
-                      <h3 className="text-lg font-semibold mb-1">
-                        Escaleras Escamoteables
-                      </h3>
-                      <p className="text-sm text-gray-500">Pròximament</p>
-                      <span className="mt-2 inline-block text-xs font-semibold text-gray-400">
-                        PRÒXIMAMENT
-                      </span>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="bg-white rounded-lg border p-4 text-sm text-gray-600">
-                  <h4 className="font-semibold mb-2">ℹ️ Estat del Sistema</h4>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>✅ Login funcional</li>
-                    <li>✅ Base de dades configurada</li>
-                    <li>✅ Tarifes Vallesglass importades</li>
-                    <li>✅ Calculador de vidres operatiu</li>
-                    <li>7 categories disponibles (1 activa, 6 pròximament)</li>
-                  </ul>
-                </section>
-              </div>
-            )}
-
-            {vistaActual === 'calculador' && <CalculadorVidres />}
-          </main>
-        </>
-      ) : (
-        // SI ÉS USUARI: només el calculador
-        <main className="max-w-6xl mx-auto px-4 py-6">
-          <CalculadorVidres />
-        </main>
-      )}
-    </div>
-  )
-}
-
-export default App
+                      <span className="mt-2 inline
