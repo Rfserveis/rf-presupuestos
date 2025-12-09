@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 // ❗️ POSA AQUI les teves dades REALS i oblida variables d'entorn
-const supabaseUrl = https://lwtsdtjiwfvurquddfqd.supabase.co
-const supabaseAnonKey = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dHNkdGppd2Z2dXJxdWRkZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1ODMwNTIsImV4cCI6MjA4MDE1OTA1Mn0.aE9OqNLORZs1HhQsjfqNymabkNQJizAkwVanx0D19NU
+const supabaseUrl = 'https://lwtsdtjiwfvurquddfqd.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dHNkdGppd2Z2dXJxdWRkZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1ODMwNTIsImV4cCI6MjA4MDE1OTA1Mn0.aE9OqNLORZs1HhQsjfqNymabkNQJizAkwVanx0D19NU'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
