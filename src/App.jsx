@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import { signIn, signOut, getCurrentUser, isAdmin } from './services/auth';
 import CalculadorVidres from './components/CalculadorVidres';
 import AdminPanel from './components/Admin/AdminPanel';
-import { traductiones as t } from './locales/es';
 
 function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState('user');
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,19 +38,15 @@ function App() {
     setLoading(true);
 
     try {
-      const { user, profile } = await signIn(email, password);
-      const userWithRole = {
-        ...profile,
-        role: selectedRole === 'admin' ? 'admin' : 'user'
-      };
-      setCurrentUser(userWithRole);
-      localStorage.setItem('rfAuthUser', JSON.stringify(userWithRole));
+      // Ahora signIn valida contra Supabase y retorna el rol de la BD
+      const { profile } = await signIn(email, password);
+      
+      setCurrentUser(profile);
       setEmail('');
       setPassword('');
-      setSelectedRole('user');
       
-      // Redirigir según rol
-      if (userWithRole.role === 'admin') {
+      // Redirigir según rol (ahora viene de la BD)
+      if (profile.role === 'admin') {
         setVistaActual('admin');
       } else {
         setVistaActual('inicio');
@@ -109,7 +103,7 @@ function App() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="demo@rfserveis.com"
+                placeholder="tu@email.com"
                 required
               />
             </div>
@@ -129,26 +123,7 @@ function App() {
               />
             </div>
 
-            {/* Selección de Rol */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Rol
-              </label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="user">👤 Usuario</option>
-                <option value="admin">👨‍💼 Administrador</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                {selectedRole === 'user' 
-                  ? '📊 Acceso a Calculador de Vidrios'
-                  : '⚙️ Acceso a Panel de Administración'
-                }
-              </p>
-            </div>
+            {/* YA NO HAY SELECTOR DE ROL - El rol viene de la BD */}
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -166,12 +141,12 @@ function App() {
           </form>
 
           <div className="mt-6 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
-            <p className="font-semibold mb-2">🔐 Datos de prueba:</p>
-            <p>Email: demo@rfserveis.com</p>
-            <p>Pass: cualquiera</p>
-            <p className="mt-2 text-xs text-gray-600">
-              (Selecciona el rol que deseas usar)
-            </p>
+            <p className="font-semibold mb-2">🔐 Usuarios disponibles:</p>
+            <div className="space-y-1">
+              <p><strong>Admin:</strong> admin@rfserveis.com</p>
+              <p><strong>Usuario:</strong> demo@rfserveis.com</p>
+              <p><strong>Contraseña:</strong> Rf123</p>
+            </div>
           </div>
         </div>
       </div>
@@ -195,6 +170,11 @@ function App() {
                 {isAdmin(currentUser) && (
                   <span className="ml-2 bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-semibold">
                     👨‍💼 Administrador
+                  </span>
+                )}
+                {!isAdmin(currentUser) && (
+                  <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-semibold">
+                    👤 Usuario
                   </span>
                 )}
               </p>
@@ -320,14 +300,13 @@ function App() {
               </div>
             </div>
 
-            <div className="mt-8 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-              <h4 className="font-bold text-blue-800 mb-2">ℹ️ Estado del Sistema</h4>
-              <ul className="space-y-1 text-sm text-blue-700">
-                <li>✅ Login funcional</li>
-                <li>✅ Base de datos configurada</li>
-                <li>✅ Tarifas importadas</li>
-                <li>✅ Calculador operativo</li>
-                <li>✅ 7 categorías disponibles</li>
+            <div className="mt-8 bg-green-50 border-l-4 border-green-500 p-4 rounded">
+              <h4 className="font-bold text-green-800 mb-2">✅ Sistema Conectado a Base de Datos</h4>
+              <ul className="space-y-1 text-sm text-green-700">
+                <li>✅ Login validado contra Supabase</li>
+                <li>✅ Roles asignados desde BD</li>
+                <li>✅ Tarifas de vidrios cargadas</li>
+                <li>✅ {isAdmin(currentUser) ? 'Acceso de Administrador' : 'Acceso de Usuario'}</li>
               </ul>
             </div>
           </div>
