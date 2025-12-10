@@ -1,0 +1,47 @@
+/* ============================================================
+   ESTILOS CORPORATIVOS - RF SERVEIS
+   ============================================================ */
+
+/* Variables de colores corporativos */
+:root {
+  --rf-primary: #2563eb;
+  --rf-primary-dark: #1d4ed8;
+  --rf-secondary: #64748b;
+  --rf-success: #22c55e;
+  --rf-warning: #f59e0b;
+  --rf-error: #ef4444;
+  --rf-background: #f8fafc;
+}
+
+/* Estilos base */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--rf-background);
+}
+
+/* Botones corporativos */
+.btn-rf-primary {
+  background-color: var(--rf-primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.btn-rf-primary:hover {
+  background-color: var(--rf-primary-dark);
+}
+
+/* Cards */
+.card-rf {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+/* Header corporativo */
+.header-rf {
+  background: linear-gradient(135deg, var(--rf-primary) 0%, #7c3aed 100%);
+}
