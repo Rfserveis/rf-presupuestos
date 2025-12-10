@@ -1,7 +1,37 @@
 // ============================================================
 // VIDRES.JS - CONECTADO A LAS NUEVAS TABLAS DE SUPABASE
+// VERSION 2 - Con mapeo de colores
 // ============================================================
 import { supabase } from './supabase';
+
+/**
+ * Mapeo de colores del formulario a la BD
+ */
+const MAPEO_COLORES = {
+  'INCOLORO': 'Transparente',
+  'TRANSPARENTE': 'Transparente',
+  'VERDE': 'Verde',
+  'GRIS/BRONCE': 'Gris',
+  'GRIS': 'Gris',
+  'MATE': 'Mate',
+  'ÓPTICO': 'Óptico',
+  'OPTICO': 'Óptico',
+  'GRIS/MATE': 'Gris Mate',
+  // Mapeos inversos (por si vienen en formato BD)
+  'Transparente': 'Transparente',
+  'Mate': 'Mate',
+  'Gris': 'Gris',
+  'Verde': 'Verde'
+};
+
+/**
+ * Función para normalizar color
+ */
+const normalizarColor = (color) => {
+  if (!color) return '';
+  const colorUpper = color.toUpperCase().trim();
+  return MAPEO_COLORES[colorUpper] || MAPEO_COLORES[color] || color;
+};
 
 /**
  * Obtenir tots els proveïdors actius
@@ -176,22 +206,30 @@ export const getOperaciones = async (proveedorNombre = null, aplicaA = null) => 
 export const buscarVidre = async (filtres) => {
   const { proveidor, tipus, gruix, acabado } = filtres;
   
+  // Normalizar el color/acabado
+  const acabadoNormalizado = normalizarColor(acabado);
+  
   try {
     let vidre = null;
     
     // Determinar qué tabla consultar según el tipo
-    if (tipus === 'Laminado' || tipus.includes('Laminado') && !tipus.includes('Templado')) {
+    if (tipus === 'Laminado' || (tipus.includes('Laminado') && !tipus.includes('Templado'))) {
       // Buscar en vidrios_laminados
       const { data, error } = await supabase
         .from('vidrios_laminados')
         .select(`*, proveedor:proveedores(nombre)`)
         .eq('activo', true)
-        .eq('espesor_mm', gruix)
-        .ilike('acabado', `%${acabado}%`);
+        .eq('espesor_mm', gruix);
       
       if (!error && data?.length > 0) {
-        // Filtrar por proveedor
-        vidre = data.find(v => v.proveedor?.nombre === proveidor) || data[0];
+        // Filtrar por proveedor y acabado
+        vidre = data.find(v => 
+          v.proveedor?.nombre === proveidor && 
+          v.acabado.toLowerCase() === acabadoNormalizado.toLowerCase()
+        ) || data.find(v => 
+          v.proveedor?.nombre === proveidor
+        ) || data[0];
+        
         if (vidre) {
           vidre.precio_m2 = vidre.precio_m2;
           vidre.tipo_vidrio = 'Laminado';
@@ -213,7 +251,7 @@ export const buscarVidre = async (filtres) => {
         }
       }
     }
-    else if (tipus.includes('Laminado') && tipus.includes('Templado') || tipus.includes('Laminat') && tipus.includes('Temperat')) {
+    else if ((tipus.includes('Laminado') && tipus.includes('Templado')) || (tipus.includes('Laminat') && tipus.includes('Temperat'))) {
       // Buscar en vidrios_laminado_templado
       const { data, error } = await supabase
         .from('vidrios_laminado_templado')
@@ -225,7 +263,7 @@ export const buscarVidre = async (filtres) => {
         // Filtrar por proveedor y acabado
         vidre = data.find(v => 
           v.proveedor?.nombre === proveidor && 
-          v.acabado.toLowerCase().includes(acabado.toLowerCase())
+          v.acabado.toLowerCase().includes(acabadoNormalizado.toLowerCase())
         ) || data.find(v => v.proveedor?.nombre === proveidor) || data[0];
         
         if (vidre) {
