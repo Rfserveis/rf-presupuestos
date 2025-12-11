@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { signIn, signOut, getCurrentUser, isAdmin } from './services/auth';
 import CalculadorVidres from './components/CalculadorVidres';
+import CalculadorMarquesinas from './components/CalculadorMarquesinas';
 import AdminPanel from './components/Admin/AdminPanel';
 
 function App() {
@@ -19,7 +20,6 @@ function App() {
     try {
       const user = await getCurrentUser();
       setCurrentUser(user);
-      // Los admins van directo al panel, usuarios a inicio
       if (user && user.role === 'admin') {
         setVistaActual('admin');
       } else if (user) {
@@ -38,14 +38,12 @@ function App() {
     setLoading(true);
 
     try {
-      // Ahora signIn valida contra Supabase y retorna el rol de la BD
       const { profile } = await signIn(email, password);
       
       setCurrentUser(profile);
       setEmail('');
       setPassword('');
       
-      // Redirigir según rol (ahora viene de la BD)
       if (profile.role === 'admin') {
         setVistaActual('admin');
       } else {
@@ -93,7 +91,6 @@ function App() {
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email
@@ -108,7 +105,6 @@ function App() {
               />
             </div>
 
-            {/* Contraseña */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Contraseña
@@ -122,8 +118,6 @@ function App() {
                 required
               />
             </div>
-
-            {/* YA NO HAY SELECTOR DE ROL - El rol viene de la BD */}
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
@@ -204,7 +198,7 @@ function App() {
               🏠 Inicio
             </button>
 
-            {/* Solo usuarios normales ven el calculador */}
+            {/* Calculador Vidrios - Solo usuarios */}
             {!isAdmin(currentUser) && (
               <button
                 onClick={() => setVistaActual('calculador')}
@@ -218,6 +212,20 @@ function App() {
               </button>
             )}
 
+            {/* Calculador Marquesinas - Solo usuarios */}
+            {!isAdmin(currentUser) && (
+              <button
+                onClick={() => setVistaActual('marquesinas')}
+                className={`px-6 py-3 font-semibold transition ${
+                  vistaActual === 'marquesinas'
+                    ? 'bg-orange-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                🏗️ Marquesinas
+              </button>
+            )}
+
             <button
               className="px-6 py-3 text-gray-400 cursor-not-allowed"
               disabled
@@ -225,7 +233,7 @@ function App() {
               📋 Presupuestos (Próximamente)
             </button>
 
-            {/* Solo admins ven el panel de administración */}
+            {/* Panel Admin - Solo admins */}
             {isAdmin(currentUser) && (
               <button
                 onClick={() => setVistaActual('admin')}
@@ -251,7 +259,7 @@ function App() {
             <p className="text-gray-600 mb-6">Selecciona la categoría del presupuesto:</p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {/* Solo mostrar calculador si no es admin */}
+              {/* Vidrios - Solo usuarios */}
               {!isAdmin(currentUser) && (
                 <button
                   onClick={() => setVistaActual('calculador')}
@@ -260,6 +268,18 @@ function App() {
                   <div className="text-5xl mb-3">🪟</div>
                   <h3 className="text-xl font-bold mb-2">Vidrios</h3>
                   <p className="text-blue-100 text-sm">Catálogo completo</p>
+                </button>
+              )}
+
+              {/* MARQUESINAS - ACTIVO - Solo usuarios */}
+              {!isAdmin(currentUser) && (
+                <button
+                  onClick={() => setVistaActual('marquesinas')}
+                  className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105"
+                >
+                  <div className="text-5xl mb-3">🏗️</div>
+                  <h3 className="text-xl font-bold mb-2">Marquesinas</h3>
+                  <p className="text-orange-100 text-sm">Línea 3 Mini / Maxi</p>
                 </button>
               )}
 
@@ -273,12 +293,6 @@ function App() {
                 <div className="text-5xl mb-3">🔒</div>
                 <h3 className="text-xl font-bold mb-2">Barandilla Top Glass</h3>
                 <p className="text-indigo-100 text-sm">Próximamente</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
-                <div className="text-5xl mb-3">☂️</div>
-                <h3 className="text-xl font-bold mb-2">Marquesinas</h3>
-                <p className="text-orange-100 text-sm">Próximamente</p>
               </div>
 
               <div className="bg-gradient-to-br from-teal-400 to-teal-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
@@ -305,16 +319,22 @@ function App() {
               <ul className="space-y-1 text-sm text-green-700">
                 <li>✅ Login validado contra Supabase</li>
                 <li>✅ Roles asignados desde BD</li>
-                <li>✅ Tarifas de vidrios cargadas</li>
+                <li>✅ Tarifas de vidrios cargadas (vidrios_master)</li>
+                <li>✅ Componentes marquesinas cargados (277 items)</li>
                 <li>✅ {isAdmin(currentUser) ? 'Acceso de Administrador' : 'Acceso de Usuario'}</li>
               </ul>
             </div>
           </div>
         )}
 
-        {/* VISTA: CALCULADOR */}
+        {/* VISTA: CALCULADOR VIDRIOS */}
         {vistaActual === 'calculador' && !isAdmin(currentUser) && (
           <CalculadorVidres />
+        )}
+
+        {/* VISTA: CALCULADOR MARQUESINAS */}
+        {vistaActual === 'marquesinas' && !isAdmin(currentUser) && (
+          <CalculadorMarquesinas />
         )}
 
         {/* VISTA: PANEL ADMIN */}
