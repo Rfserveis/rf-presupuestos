@@ -1,6 +1,5 @@
 // ============================================================
-// VIDRES.JS - CONECTADO A LAS NUEVAS TABLAS DE SUPABASE
-// VERSION 2 - Con mapeo de colores
+// VIDRES.JS - v3.0 - Conectat a vidrios_master
 // ============================================================
 import { supabase } from './supabase';
 
@@ -17,16 +16,12 @@ const MAPEO_COLORES = {
   'ÓPTICO': 'Óptico',
   'OPTICO': 'Óptico',
   'GRIS/MATE': 'Gris Mate',
-  // Mapeos inversos (por si vienen en formato BD)
   'Transparente': 'Transparente',
   'Mate': 'Mate',
   'Gris': 'Gris',
   'Verde': 'Verde'
 };
 
-/**
- * Función para normalizar color
- */
 const normalizarColor = (color) => {
   if (!color) return '';
   const colorUpper = color.toUpperCase().trim();
@@ -36,7 +31,7 @@ const normalizarColor = (color) => {
 /**
  * Obtenir tots els proveïdors actius
  */
-export const getProveidors = async (tipus = null) => {
+export const getProveidors = async () => {
   try {
     const { data, error } = await supabase
       .from('proveedores')
@@ -46,16 +41,13 @@ export const getProveidors = async (tipus = null) => {
     
     if (error) throw error;
     
-    // Mapear a formato esperado por el componente
     return data.map(p => ({
       id: p.id,
       nom: p.nombre,
       nombre: p.nombre,
-      hace_laminado: p.hace_laminado,
-      hace_templado: p.hace_templado,
-      hace_laminado_templado: p.hace_laminado_templado,
-      es_habitual_laminado: p.es_habitual_laminado,
-      es_habitual_laminado_templado: p.es_habitual_laminado_templado
+      hace_vidrios: p.hace_vidrios,
+      hace_marquesinas: p.hace_marquesinas,
+      es_habitual: p.es_habitual
     }));
   } catch (error) {
     console.error('Error obtenint proveïdors:', error);
@@ -64,26 +56,48 @@ export const getProveidors = async (tipus = null) => {
 };
 
 /**
- * Obtenir vidres laminats
+ * Obtenir vidres per categoria
  */
-export const getVidriosLaminados = async (proveedorNombre = null) => {
+export const getVidrios = async (categoria = 'VIDRIOS', proveedorNombre = null) => {
   try {
-    let query = supabase
-      .from('vidrios_laminados')
+    const { data, error } = await supabase
+      .from('vidrios_master')
       .select(`
         *,
         proveedor:proveedores(nombre)
       `)
+      .eq('categoria', categoria)
       .eq('activo', true);
     
-    const { data, error } = await query;
     if (error) throw error;
     
-    // Filtrar por proveedor si se especifica
     if (proveedorNombre) {
       return data.filter(v => v.proveedor?.nombre === proveedorNombre);
     }
     
+    return data;
+  } catch (error) {
+    console.error('Error obtenint vidres:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtenir vidres laminats (retrocompatibilitat)
+ */
+export const getVidriosLaminados = async (proveedorNombre = null) => {
+  try {
+    const { data, error } = await supabase
+      .from('vidrios_master')
+      .select(`*, proveedor:proveedores(nombre)`)
+      .eq('tipo', 'Laminado')
+      .eq('activo', true);
+    
+    if (error) throw error;
+    
+    if (proveedorNombre) {
+      return data.filter(v => v.proveedor?.nombre === proveedorNombre);
+    }
     return data;
   } catch (error) {
     console.error('Error obtenint vidres laminats:', error);
@@ -92,25 +106,21 @@ export const getVidriosLaminados = async (proveedorNombre = null) => {
 };
 
 /**
- * Obtenir vidres laminat templat
+ * Obtenir vidres laminat templat (retrocompatibilitat)
  */
 export const getVidriosLaminadoTemplado = async (proveedorNombre = null) => {
   try {
-    let query = supabase
-      .from('vidrios_laminado_templado')
-      .select(`
-        *,
-        proveedor:proveedores(nombre)
-      `)
+    const { data, error } = await supabase
+      .from('vidrios_master')
+      .select(`*, proveedor:proveedores(nombre)`)
+      .eq('tipo', 'Laminado Templado')
       .eq('activo', true);
     
-    const { data, error } = await query;
     if (error) throw error;
     
     if (proveedorNombre) {
       return data.filter(v => v.proveedor?.nombre === proveedorNombre);
     }
-    
     return data;
   } catch (error) {
     console.error('Error obtenint vidres laminat templat:', error);
@@ -119,25 +129,21 @@ export const getVidriosLaminadoTemplado = async (proveedorNombre = null) => {
 };
 
 /**
- * Obtenir vidres templats
+ * Obtenir vidres templats (retrocompatibilitat)
  */
 export const getVidriosTemplados = async (proveedorNombre = null) => {
   try {
-    let query = supabase
-      .from('vidrios_templados')
-      .select(`
-        *,
-        proveedor:proveedores(nombre)
-      `)
+    const { data, error } = await supabase
+      .from('vidrios_master')
+      .select(`*, proveedor:proveedores(nombre)`)
+      .eq('tipo', 'Templado')
       .eq('activo', true);
     
-    const { data, error } = await query;
     if (error) throw error;
     
     if (proveedorNombre) {
       return data.filter(v => v.proveedor?.nombre === proveedorNombre);
     }
-    
     return data;
   } catch (error) {
     console.error('Error obtenint vidres templats:', error);
@@ -146,18 +152,21 @@ export const getVidriosTemplados = async (proveedorNombre = null) => {
 };
 
 /**
- * Obtenir vidres per marquesines (SentryGlas / OpaciGlas)
+ * Obtenir vidres marquesines
  */
-export const getVidriosMarquesinas = async () => {
+export const getVidriosMarquesinas = async (pvb = null) => {
   try {
-    const { data, error } = await supabase
-      .from('vidrios_marquesinas')
-      .select(`
-        *,
-        proveedor:proveedores(nombre)
-      `)
+    let query = supabase
+      .from('vidrios_master')
+      .select(`*, proveedor:proveedores(nombre)`)
+      .eq('categoria', 'MARQUESINAS')
       .eq('activo', true);
     
+    if (pvb) {
+      query = query.eq('pvb', pvb);
+    }
+    
+    const { data, error } = await query;
     if (error) throw error;
     return data;
   } catch (error) {
@@ -167,16 +176,13 @@ export const getVidriosMarquesinas = async () => {
 };
 
 /**
- * Obtenir operacions (cantos, taladros, etc.)
+ * Obtenir operacions
  */
 export const getOperaciones = async (proveedorNombre = null, aplicaA = null) => {
   try {
     const { data, error } = await supabase
       .from('operaciones')
-      .select(`
-        *,
-        proveedor:proveedores(nombre)
-      `)
+      .select(`*, proveedor:proveedores(nombre)`)
       .eq('activo', true);
     
     if (error) throw error;
@@ -201,94 +207,51 @@ export const getOperaciones = async (proveedorNombre = null, aplicaA = null) => 
 };
 
 /**
- * Buscar vidre específic segons tipus i característiques
+ * Buscar vidre específic
  */
 export const buscarVidre = async (filtres) => {
-  const { proveidor, tipus, gruix, acabado } = filtres;
-  
-  // Normalizar el color/acabado
+  const { proveidor, tipus, gruix, acabado, categoria = 'VIDRIOS' } = filtres;
   const acabadoNormalizado = normalizarColor(acabado);
   
   try {
-    let vidre = null;
-    
-    // Determinar qué tabla consultar según el tipo
-    if (tipus === 'Laminado' || (tipus.includes('Laminado') && !tipus.includes('Templado'))) {
-      // Buscar en vidrios_laminados
-      const { data, error } = await supabase
-        .from('vidrios_laminados')
-        .select(`*, proveedor:proveedores(nombre)`)
-        .eq('activo', true)
-        .eq('espesor_mm', gruix);
-      
-      if (!error && data?.length > 0) {
-        // Filtrar por proveedor y acabado
-        vidre = data.find(v => 
-          v.proveedor?.nombre === proveidor && 
-          v.acabado.toLowerCase() === acabadoNormalizado.toLowerCase()
-        ) || data.find(v => 
-          v.proveedor?.nombre === proveidor
-        ) || data[0];
-        
-        if (vidre) {
-          vidre.precio_m2 = vidre.precio_m2;
-          vidre.tipo_vidrio = 'Laminado';
-        }
-      }
-    } 
-    else if (tipus === 'Templado' || tipus === 'Temperat') {
-      // Buscar en vidrios_templados
-      const { data, error } = await supabase
-        .from('vidrios_templados')
-        .select(`*, proveedor:proveedores(nombre)`)
-        .eq('activo', true)
-        .eq('espesor_mm', gruix);
-      
-      if (!error && data?.length > 0) {
-        vidre = data.find(v => v.proveedor?.nombre === proveidor) || data[0];
-        if (vidre) {
-          vidre.tipo_vidrio = 'Templado';
-        }
-      }
-    }
-    else if ((tipus.includes('Laminado') && tipus.includes('Templado')) || (tipus.includes('Laminat') && tipus.includes('Temperat'))) {
-      // Buscar en vidrios_laminado_templado
-      const { data, error } = await supabase
-        .from('vidrios_laminado_templado')
-        .select(`*, proveedor:proveedores(nombre)`)
-        .eq('activo', true)
-        .eq('espesor_mm', gruix);
-      
-      if (!error && data?.length > 0) {
-        // Filtrar por proveedor y acabado
-        vidre = data.find(v => 
-          v.proveedor?.nombre === proveidor && 
-          v.acabado.toLowerCase().includes(acabadoNormalizado.toLowerCase())
-        ) || data.find(v => v.proveedor?.nombre === proveidor) || data[0];
-        
-        if (vidre) {
-          vidre.precio_m2 = vidre.precio_total_m2;
-          vidre.tipo_vidrio = 'Laminado Templado';
-        }
-      }
-    }
-    else if (tipus.includes('SentryGlas') || tipus.includes('Sentry')) {
-      // Buscar en vidrios_marquesinas
-      const { data, error } = await supabase
-        .from('vidrios_marquesinas')
-        .select(`*, proveedor:proveedores(nombre)`)
-        .eq('activo', true)
-        .eq('intercapa', 'SentryGlas')
-        .eq('espesor_mm', gruix);
-      
-      if (!error && data?.length > 0) {
-        vidre = data[0];
-        vidre.tipo_vidrio = 'Laminado Templado SG';
-      }
+    // Determinar tipo de vidrio
+    let tipoVidrio = 'Laminado';
+    if (tipus === 'Templado' || tipus === 'Temperat') {
+      tipoVidrio = 'Templado';
+    } else if (tipus.includes('Laminado') && tipus.includes('Templado')) {
+      tipoVidrio = 'Laminado Templado';
+    } else if (tipus.includes('Laminat') && tipus.includes('Temperat')) {
+      tipoVidrio = 'Laminado Templado';
     }
     
-    return vidre;
+    const { data, error } = await supabase
+      .from('vidrios_master')
+      .select(`*, proveedor:proveedores(nombre)`)
+      .eq('categoria', categoria)
+      .eq('tipo', tipoVidrio)
+      .eq('espesor_mm', gruix)
+      .eq('activo', true);
     
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      // Filtrar per proveïdor i acabat
+      let vidre = data.find(v => 
+        v.proveedor?.nombre === proveidor && 
+        v.acabado.toLowerCase().includes(acabadoNormalizado.toLowerCase())
+      ) || data.find(v => 
+        v.proveedor?.nombre === proveidor
+      ) || data[0];
+      
+      if (vidre) {
+        vidre.tipo_vidrio = tipoVidrio;
+        vidre.precio_m2 = parseFloat(vidre.precio_m2);
+      }
+      
+      return vidre;
+    }
+    
+    return null;
   } catch (error) {
     console.error('Error buscant vidre:', error);
     throw error;
@@ -296,7 +259,7 @@ export const buscarVidre = async (filtres) => {
 };
 
 /**
- * Obtenir preu de procés (cant, punta, forat)
+ * Obtenir preu de procés
  */
 export const getPreuProces = async (proveidor, tipusProces, tipoVidrio = 'TODOS') => {
   try {
@@ -307,7 +270,6 @@ export const getPreuProces = async (proveidor, tipusProces, tipoVidrio = 'TODOS'
     
     if (error) throw error;
     
-    // Mapear tipo de proceso a descripción
     const mapeoTipos = {
       'cant': 'canto pulido',
       'canto': 'canto pulido',
@@ -319,11 +281,10 @@ export const getPreuProces = async (proveidor, tipusProces, tipoVidrio = 'TODOS'
     
     const busqueda = mapeoTipos[tipusProces.toLowerCase()] || tipusProces.toLowerCase();
     
-    // Filtrar operaciones
     const operacion = data.find(o => 
       o.proveedor?.nombre === proveidor &&
       o.descripcion.toLowerCase().includes(busqueda) &&
-      (o.aplica_a === 'TODOS' || o.aplica_a === tipoVidrio)
+      (o.aplica_a === 'TODOS' || o.aplica_a === tipoVidrio || o.aplica_a === 'LAMINADO' || o.aplica_a === 'TEMPLADO')
     );
     
     if (operacion) {
@@ -348,62 +309,44 @@ export const getPreuProces = async (proveidor, tipusProces, tipoVidrio = 'TODOS'
 export const calcularPreuVidre = async (configuracio) => {
   try {
     const {
-      amplada,
-      alcada,
-      quantitat,
-      forma,
-      tipus,
-      gruix,
-      color,
-      proveidor,
-      cantos,
-      puntes,
-      quantitatPuntes,
-      forats,
-      quantitatForats,
-      diametreForats
+      amplada, alcada, quantitat, forma, tipus, gruix, color, proveidor,
+      cantos, puntes, quantitatPuntes, forats, quantitatForats, diametreForats
     } = configuracio;
     
-    // 1. Buscar el vidre a la base de dades
+    // 1. Buscar el vidre
     const vidre = await buscarVidre({
-      proveidor,
-      tipus,
-      gruix,
-      acabado: color
+      proveidor, tipus, gruix, acabado: color
     });
     
     if (!vidre) {
-      throw new Error(`No s'ha trobat vidre: ${tipus} ${gruix} ${color} de ${proveidor}`);
+      throw new Error(`No se ha encontrado vidrio: ${tipus} ${gruix} ${color} de ${proveidor}`);
     }
     
     // 2. Calcular m²
     const m2Unitat = (amplada * alcada) / 1000000;
     const m2Total = m2Unitat * quantitat;
     
-    // 3. Preu base (ja no hi ha descomptes, el preu és net)
+    // 3. Preu base
     const preuM2 = parseFloat(vidre.precio_m2);
     let preuBase = preuM2 * m2Total;
     
-    // 4. Recàrrec per vidre inclinat (si aplica)
+    // 4. Recàrrec per vidre inclinat
     let recarrecInclinat = 0;
     if (forma === 'inclinat') {
-      // Buscar recargo en operaciones
       const recargo = await getPreuProces(proveidor, 'recargo forma', vidre.tipo_vidrio);
       if (recargo && recargo.tipo_calculo === 'PORCENTAJE') {
         recarrecInclinat = preuBase * (recargo.preu / 100);
       }
     }
     
-    // 5. Calcular processos
+    // 5. Processos
     let preuProcessos = 0;
     const detallProcessos = [];
-    
-    // Determinar si permite taladros
     const permiteTaladros = vidre.tipo_vidrio !== 'Laminado';
     
     // Cantos
     if (cantos) {
-      const perimetreUnitat = (2 * (amplada + alcada)) / 1000; // en metres
+      const perimetreUnitat = (2 * (amplada + alcada)) / 1000;
       const perimetreTotal = perimetreUnitat * quantitat;
       const preuCant = await getPreuProces(proveidor, 'canto', vidre.tipo_vidrio);
       
@@ -417,21 +360,12 @@ export const calcularPreuVidre = async (configuracio) => {
           preuUnitat: preuCant.preu,
           total: costCantos
         });
-      } else if (preuCant && preuCant.preu === 0) {
-        detallProcessos.push({
-          tipus: 'Cantos pulidos',
-          quantitat: perimetreTotal.toFixed(2),
-          unitat: 'ml',
-          preuUnitat: 0,
-          total: 0
-        });
       }
     }
     
     // Puntes
     if (puntes && quantitatPuntes > 0) {
       const preuPunta = await getPreuProces(proveidor, 'punta', vidre.tipo_vidrio);
-      
       if (preuPunta && preuPunta.preu > 0) {
         const totalPuntes = quantitatPuntes * quantitat;
         const costPuntes = preuPunta.preu * totalPuntes;
@@ -446,10 +380,9 @@ export const calcularPreuVidre = async (configuracio) => {
       }
     }
     
-    // Forats (solo si el vidrio lo permite)
+    // Forats
     if (forats && quantitatForats > 0 && permiteTaladros) {
       const preuForat = await getPreuProces(proveidor, 'taladro', vidre.tipo_vidrio);
-      
       if (preuForat && preuForat.preu > 0) {
         const totalForats = quantitatForats * quantitat;
         const costForats = preuForat.preu * totalForats;
@@ -463,7 +396,7 @@ export const calcularPreuVidre = async (configuracio) => {
         });
       }
     } else if (forats && quantitatForats > 0 && !permiteTaladros) {
-      throw new Error('Los taladros solo se pueden hacer en vidrio templado o laminado templado. El vidrio laminado simple no se puede perforar.');
+      throw new Error('Los taladros solo se pueden hacer en vidrio templado o laminado templado.');
     }
     
     // 6. Total
@@ -478,8 +411,7 @@ export const calcularPreuVidre = async (configuracio) => {
         preuNetM2: preuM2
       },
       mides: {
-        amplada,
-        alcada,
+        amplada, alcada,
         m2Unitat: m2Unitat.toFixed(4),
         m2Total: m2Total.toFixed(4),
         quantitat
@@ -492,7 +424,6 @@ export const calcularPreuVidre = async (configuracio) => {
       },
       detallProcessos
     };
-    
   } catch (error) {
     console.error('Error calculant preu:', error);
     throw error;
@@ -523,23 +454,22 @@ export const getReglasNegocio = async (categoria = null) => {
 };
 
 /**
- * Llistar tots els vidres disponibles (per debug/admin)
+ * Llistar tots els vidres (debug/admin)
  */
 export const llistarTotsVidres = async () => {
   try {
-    const [laminados, templados, laminadoTemplado, marquesinas] = await Promise.all([
-      getVidriosLaminados(),
-      getVidriosTemplados(),
-      getVidriosLaminadoTemplado(),
-      getVidriosMarquesinas()
-    ]);
+    const { data, error } = await supabase
+      .from('vidrios_master')
+      .select(`*, proveedor:proveedores(nombre)`)
+      .eq('activo', true)
+      .order('categoria')
+      .order('tipo')
+      .order('espesor_mm');
     
+    if (error) throw error;
     return {
-      laminados,
-      templados,
-      laminadoTemplado,
-      marquesinas,
-      total: laminados.length + templados.length + laminadoTemplado.length + marquesinas.length
+      vidrios: data,
+      total: data.length
     };
   } catch (error) {
     console.error('Error llistant vidres:', error);
