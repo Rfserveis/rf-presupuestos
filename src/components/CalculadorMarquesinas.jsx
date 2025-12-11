@@ -28,7 +28,7 @@ const CalculadorMarquesinas = () => {
     acabadoPerfil: 'Raw',
     conLed: false,
     cantoPulido: true,
-    cantoRepolido: false,
+    cantoRepulido: false,
     puntasRoma: true,
     cantidadPuntas: 4 // por vidrio
   });
@@ -139,7 +139,7 @@ const CalculadorMarquesinas = () => {
       setLoading(true);
       setError(null);
       
-      const { longitudTotal, volada, modelo, espesor, pvb, acabadoVidrio, acabadoPerfil, cantoPulido, cantoRepolido, puntasRoma, cantidadPuntas } = config;
+      const { longitudTotal, volada, modelo, espesor, pvb, acabadoVidrio, acabadoPerfil, cantoPulido, cantoRepulido, puntasRoma, cantidadPuntas } = config;
       
       // Validaciones
       if (!longitudTotal || longitudTotal <= 0) {
@@ -353,7 +353,7 @@ const CalculadorMarquesinas = () => {
       }
       
       // Canto pulido
-      if (cantoPulido && !cantoRepolido) {
+      if (cantoPulido && !cantoRepulido) {
         const opCanto = operaciones.find(o => o.descripcion.toLowerCase().includes('canto pulido'));
         if (opCanto) {
           const costoCanto = opCanto.precio * perimetroTotal;
@@ -367,17 +367,17 @@ const CalculadorMarquesinas = () => {
         }
       }
       
-      // Canto repolido
-      if (cantoRepolido) {
-        const opRepolido = operaciones.find(o => o.descripcion.toLowerCase().includes('repolido'));
-        if (opRepolido) {
-          const costoRepolido = opRepolido.precio * perimetroTotal;
-          totalOperaciones += costoRepolido;
+      // Canto repulido
+      if (cantoRepulido) {
+        const opRepulido = operaciones.find(o => o.descripcion.toLowerCase().includes('repulido'));
+        if (opRepulido) {
+          const costoRepulido = opRepulido.precio * perimetroTotal;
+          totalOperaciones += costoRepulido;
           detalleOperaciones.push({
-            descripcion: 'Canto repolido',
+            descripcion: 'Canto repulido',
             cantidad: `${perimetroTotal.toFixed(2)} ml`,
-            precioUnitario: opRepolido.precio,
-            total: costoRepolido
+            precioUnitario: opRepulido.precio,
+            total: costoRepulido
           });
         }
       }
@@ -598,10 +598,10 @@ const CalculadorMarquesinas = () => {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.cantoPulido && !config.cantoRepolido}
+                  checked={config.cantoPulido && !config.cantoRepulido}
                   onChange={(e) => {
                     handleChange('cantoPulido', e.target.checked);
-                    if (e.target.checked) handleChange('cantoRepolido', false);
+                    if (e.target.checked) handleChange('cantoRepulido', false);
                   }}
                   className="w-5 h-5 rounded text-blue-600"
                 />
@@ -611,14 +611,14 @@ const CalculadorMarquesinas = () => {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.cantoRepolido}
+                  checked={config.cantoRepulido}
                   onChange={(e) => {
-                    handleChange('cantoRepolido', e.target.checked);
+                    handleChange('cantoRepulido', e.target.checked);
                     if (e.target.checked) handleChange('cantoPulido', false);
                   }}
                   className="w-5 h-5 rounded text-blue-600"
                 />
-                <span>Canto repolido (mayor calidad)</span>
+                <span>Canto repulido (mayor calidad)</span>
               </label>
               
               <div className="flex items-center gap-3">
