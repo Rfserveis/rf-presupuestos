@@ -28,7 +28,7 @@ const CalculadorMarquesinas = () => {
     acabadoPerfil: 'Raw',
     conLed: false,
     cantoPulido: true,
-    cantoRepulido: false,
+    cantoRepulido: false, // Ara es pot marcar juntament amb pulido
     puntasRoma: true,
     cantidadPuntas: 4 // por vidrio
   });
@@ -113,7 +113,6 @@ const CalculadorMarquesinas = () => {
         const modelo = MODELOS.find(m => m.value === value);
         if (modelo) {
           newConfig.espesor = modelo.espesores[0];
-          // Ajustar LED
           newConfig.conLed = value.includes('LED');
         }
       }
@@ -352,9 +351,9 @@ const CalculadorMarquesinas = () => {
         numPuntasTotal += cantidadPuntas * tram.numVidrios;
       }
       
-      // Canto pulido
-      if (cantoPulido && !cantoRepulido) {
-        const opCanto = operaciones.find(o => o.descripcion.toLowerCase().includes('canto pulido'));
+      // Canto pulido (es pot combinar amb repulido)
+      if (cantoPulido) {
+        const opCanto = operaciones.find(o => o.descripcion.toLowerCase().includes('canto pulido') && !o.descripcion.toLowerCase().includes('repulido'));
         if (opCanto) {
           const costoCanto = opCanto.precio * perimetroTotal;
           totalOperaciones += costoCanto;
@@ -367,7 +366,7 @@ const CalculadorMarquesinas = () => {
         }
       }
       
-      // Canto repulido
+      // Canto repulido (es pot combinar amb pulido)
       if (cantoRepulido) {
         const opRepulido = operaciones.find(o => o.descripcion.toLowerCase().includes('repulido'));
         if (opRepulido) {
@@ -598,11 +597,8 @@ const CalculadorMarquesinas = () => {
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.cantoPulido && !config.cantoRepulido}
-                  onChange={(e) => {
-                    handleChange('cantoPulido', e.target.checked);
-                    if (e.target.checked) handleChange('cantoRepulido', false);
-                  }}
+                  checked={config.cantoPulido}
+                  onChange={(e) => handleChange('cantoPulido', e.target.checked)}
                   className="w-5 h-5 rounded text-blue-600"
                 />
                 <span>Canto pulido</span>
@@ -612,16 +608,19 @@ const CalculadorMarquesinas = () => {
                 <input
                   type="checkbox"
                   checked={config.cantoRepulido}
-                  onChange={(e) => {
-                    handleChange('cantoRepulido', e.target.checked);
-                    if (e.target.checked) handleChange('cantoPulido', false);
-                  }}
+                  onChange={(e) => handleChange('cantoRepulido', e.target.checked)}
                   className="w-5 h-5 rounded text-blue-600"
                 />
                 <span>Canto repulido (mayor calidad)</span>
               </label>
               
-              <div className="flex items-center gap-3">
+              {config.cantoPulido && config.cantoRepulido && (
+                <p className="text-xs text-blue-600 ml-8">
+                  ✓ Se aplicarán ambos procesos (pulido + repulido)
+                </p>
+              )}
+              
+              <div className="flex items-center gap-3 pt-2">
                 <input
                   type="checkbox"
                   checked={config.puntasRoma}
