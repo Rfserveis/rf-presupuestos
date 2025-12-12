@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { signIn, signOut, getCurrentUser, isAdmin } from './services/auth';
 import CalculadorVidres from './components/CalculadorVidres';
+import CalculadorMarquesinas from './components/CalculadorMarquesinas';
 import AdminPanel from './components/Admin/AdminPanel';
 import { traductiones as t } from './locales/es';
 
@@ -131,7 +132,7 @@ function App() {
               </select>
               <p className="text-xs text-gray-500 mt-1">
                 {selectedRole === 'usuario' 
-                  ? '📊 Acceso a Calculador de Vidrios'
+                  ? '📊 Acceso a Calculadores'
                   : '⚙️ Acceso a Panel de Administración'
                 }
               </p>
@@ -155,7 +156,7 @@ function App() {
           <div className="mt-6 p-4 bg-blue-50 rounded-lg text-sm text-blue-700">
             <p className="font-semibold mb-2">🔐 Datos de prueba:</p>
             <p>Email: demo@rfserveis.com</p>
-            <p>Pass: demo123</p>
+            <p>Pass: Rf123</p>
             <p className="mt-2 text-xs text-gray-600">
               (Selecciona el rol que deseas usar abajo)
             </p>
@@ -209,16 +210,29 @@ function App() {
             </button>
 
             {!isAdmin(currentUser) && (
-              <button
-                onClick={() => setVistaActual('calculador')}
-                className={`px-6 py-3 font-semibold transition ${
-                  vistaActual === 'calculador'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                🪟 {t.nav.calculadorVidres}
-              </button>
+              <>
+                <button
+                  onClick={() => setVistaActual('calculador')}
+                  className={`px-6 py-3 font-semibold transition ${
+                    vistaActual === 'calculador'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  🪟 {t.nav.calculadorVidres}
+                </button>
+
+                <button
+                  onClick={() => setVistaActual('marquesinas')}
+                  className={`px-6 py-3 font-semibold transition ${
+                    vistaActual === 'marquesinas'
+                      ? 'bg-green-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  ☂️ Marquesinas
+                </button>
+              </>
             )}
 
             <button
@@ -252,14 +266,25 @@ function App() {
             
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {!isAdmin(currentUser) && (
-                <button
-                  onClick={() => setVistaActual('calculador')}
-                  className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105"
-                >
-                  <div className="text-5xl mb-3">🪟</div>
-                  <h3 className="text-xl font-bold mb-2">{t.home.vidrios}</h3>
-                  <p className="text-blue-100 text-sm">{t.home.catalogoCompleto}</p>
-                </button>
+                <>
+                  <button
+                    onClick={() => setVistaActual('calculador')}
+                    className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105 cursor-pointer"
+                  >
+                    <div className="text-5xl mb-3">🪟</div>
+                    <h3 className="text-xl font-bold mb-2">{t.home.vidrios}</h3>
+                    <p className="text-blue-100 text-sm">{t.home.catalogoCompleto}</p>
+                  </button>
+
+                  <button
+                    onClick={() => setVistaActual('marquesinas')}
+                    className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-6 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105 cursor-pointer"
+                  >
+                    <div className="text-5xl mb-3">☂️</div>
+                    <h3 className="text-xl font-bold mb-2">Marquesinas</h3>
+                    <p className="text-orange-100 text-sm">Catálogo completo</p>
+                  </button>
+                </>
               )}
 
               <div className="bg-gradient-to-br from-purple-400 to-purple-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
@@ -272,12 +297,6 @@ function App() {
                 <div className="text-5xl mb-3">🔒</div>
                 <h3 className="text-xl font-bold mb-2">{t.home.barandillaTopGlass}</h3>
                 <p className="text-indigo-100 text-sm">{t.nav.proximamente}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-orange-400 to-orange-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
-                <div className="text-5xl mb-3">☂️</div>
-                <h3 className="text-xl font-bold mb-2">{t.home.marquesinas}</h3>
-                <p className="text-orange-100 text-sm">{t.nav.proximamente}</p>
               </div>
 
               <div className="bg-gradient-to-br from-teal-400 to-teal-500 text-white p-6 rounded-lg shadow-lg opacity-60 cursor-not-allowed">
@@ -306,6 +325,7 @@ function App() {
                 <li>✅ {t.home.baseDatosCofigurada}</li>
                 <li>✅ {t.home.tarifasImportadas}</li>
                 <li>✅ {t.home.calculadorOperativo}</li>
+                <li>✅ Calculador de Marquesinas operativo</li>
                 <li>🔄 {t.home.categoriasDisponibles}</li>
               </ul>
             </div>
@@ -314,6 +334,10 @@ function App() {
 
         {vistaActual === 'calculador' && !isAdmin(currentUser) && (
           <CalculadorVidres />
+        )}
+
+        {vistaActual === 'marquesinas' && !isAdmin(currentUser) && (
+          <CalculadorMarquesinas />
         )}
 
         {vistaActual === 'admin' && isAdmin(currentUser) && (
