@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useNavigate } from 'react-router-dom'
 
 /**
  * LoginForm - Componente con 3 tabs:
@@ -11,7 +10,7 @@ import { useNavigate } from 'react-router-dom'
 
 export const LoginForm = () => {
   const { login, signup, resetPassword } = useAuth()
-  const navigate = useNavigate()
+  
 
   // Estados
   const [tab, setTab] = useState('login') // 'login' | 'signup' | 'reset'
@@ -45,7 +44,7 @@ export const LoginForm = () => {
     if (result.success) {
       setSuccess('Inicio de sesión exitoso')
       setTimeout(() => {
-        navigate('/dashboard')
+        window.location.href = '/dashboard''/dashboard')
       }, 1000)
     } else {
       setError(result.message)
@@ -75,7 +74,7 @@ export const LoginForm = () => {
     if (result.success) {
       setSuccess('Cuenta creada exitosamente. Iniciando sesión...')
       setTimeout(() => {
-        navigate('/dashboard')
+        window.location.href = '/dashboard''/dashboard')
       }, 1500)
     } else {
       setError(result.message)
