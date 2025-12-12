@@ -6,11 +6,12 @@ import { useAuth } from '../context/AuthContext'
  * 1. Login
  * 2. Signup (registrar nuevo usuario)
  * 3. Reset Password (recuperar contraseña)
+ * 
+ * SIN dependencia de react-router-dom
  */
 
 export const LoginForm = () => {
   const { login, signup, resetPassword } = useAuth()
-  
 
   // Estados
   const [tab, setTab] = useState('login') // 'login' | 'signup' | 'reset'
@@ -44,7 +45,7 @@ export const LoginForm = () => {
     if (result.success) {
       setSuccess('Inicio de sesión exitoso')
       setTimeout(() => {
-        window.location.href = '/dashboard''/dashboard')
+        window.location.href = '/'
       }, 1000)
     } else {
       setError(result.message)
@@ -74,7 +75,7 @@ export const LoginForm = () => {
     if (result.success) {
       setSuccess('Cuenta creada exitosamente. Iniciando sesión...')
       setTimeout(() => {
-        window.location.href = '/dashboard''/dashboard')
+        window.location.href = '/'
       }, 1500)
     } else {
       setError(result.message)
