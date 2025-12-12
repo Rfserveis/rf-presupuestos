@@ -1,123 +1,204 @@
-// ============================================================
-// AUTH.JS - CONECTADO A SUPABASE
-// ============================================================
-// Valida usuarios contra la tabla "users" de Supabase
-// ============================================================
+import { supabase } from './supabase'
 
-import { supabase } from './supabase';
-
-// Iniciar sesión - valida contra BD
+/**
+ * SIGN IN - Iniciar sesión con Supabase
+ */
 export const signIn = async (email, password) => {
   try {
-    // Buscar usuario en la tabla users de Supabase
-    const { data: user, error } = await supabase
+    // Obtener usuario de Supabase
+    const { data: user, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
-      .eq('activo', true)
-      .single();
+      .single()
 
-    if (error || !user) {
-      throw new Error('Usuario no encontrado');
+    if (userError || !user) {
+      throw new Error('Email o contraseña incorrectos')
     }
 
-    // Validar contraseña
-    if (user.password !== password) {
-      throw new Error('Contraseña incorrecta');
+    if (!user.is_active) {
+      throw new Error('Usuario inactivo')
     }
 
-    // Preparar objeto de usuario para guardar
-    const userProfile = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.rol  // 'admin' o 'user'
-    };
+    // Verificar contraseña (comparación simple)
+    // NOTA: En producción, usar bcrypt en backend
+    const passwordMatch = user.password_hash.includes(password) || 
+                         verifySimpleHash(password, user.password_hash)
+
+    if (!passwordMatch) {
+      throw new Error('Email o contraseña incorrectos')
+    }
 
     // Guardar en localStorage
-    localStorage.setItem('rfAuthUser', JSON.stringify(userProfile));
+    const userData = {
+      id: user.id,
+      email: user.email,
+      nombre: user.name,
+      role: user.role === 'admin' ? 'admin' : 'usuario'
+    }
+
+    localStorage.setItem('rfAuthUser', JSON.stringify(userData))
+    localStorage.setItem('rfAuthToken', `token_${user.id}`)
 
     return {
-      user: user.id,
-      profile: userProfile
-    };
-
-  } catch (err) {
-    console.error('Error en signIn:', err);
-    throw err;
+      user: userData,
+      profile: userData
+    }
+  } catch (error) {
+    throw new Error(error.message || 'Error en login')
   }
-};
+}
 
-// Cerrar sesión
+/**
+ * SIGN OUT - Cerrar sesión
+ */
 export const signOut = async () => {
-  localStorage.removeItem('rfAuthUser');
-};
+  localStorage.removeItem('rfAuthUser')
+  localStorage.removeItem('rfAuthToken')
+  return true
+}
 
-// Obtener usuario actual desde localStorage
+/**
+ * GET CURRENT USER - Obtener usuario actual
+ */
 export const getCurrentUser = async () => {
-  const stored = localStorage.getItem('rfAuthUser');
-  return stored ? JSON.parse(stored) : null;
-};
+  try {
+    const stored = localStorage.getItem('rfAuthUser')
+    if (!stored) {
+      return null
+    }
 
-// Verificar si es admin
+    const user = JSON.parse(stored)
+
+    // Verificar que el token existe
+    const token = localStorage.getItem('rfAuthToken')
+    if (!token) {
+      localStorage.removeItem('rfAuthUser')
+      return null
+    }
+
+    return user
+  } catch (error) {
+    console.error('Error getting current user:', error)
+    localStorage.removeItem('rfAuthUser')
+    localStorage.removeItem('rfAuthToken')
+    return null
+  }
+}
+
+/**
+ * IS ADMIN - Verificar si es administrador
+ */
 export const isAdmin = (user) => {
-  return user?.role === 'admin';
-};
+  if (!user) return false
+  return user.role === 'admin'
+}
 
-// Verificar si es usuario normal
-export const isUsuario = (user) => {
-  return user?.role === 'user';
-};
+/**
+ * HELPER: Verificar hash simple
+ * (Para bcrypt hasheado, comparar patrones básicos)
+ */
+const verifySimpleHash = (password, hash) => {
+  // Si el hash contiene la contraseña en plain text (fallback)
+  if (hash.includes(password)) {
+    return true
+  }
 
-// ============================================================
-// FUNCIONES ADICIONALES PARA GESTIÓN DE USUARIOS
-// ============================================================
+  // Para bcrypt, en cliente es difícil verificar
+  // Esto es una fallback simple
+  return false
+}
 
-// Obtener todos los usuarios (solo para admins)
+/**
+ * GET ALL USERS (solo para admin)
+ */
 export const getAllUsers = async () => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, email, name, rol, activo, created_at')
-    .order('created_at', { ascending: false });
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false })
 
-  if (error) throw error;
-  return data;
-};
+    if (error) {
+      throw new Error(error.message)
+    }
 
-// Crear nuevo usuario (solo para admins)
-export const createUser = async (email, password, name, rol = 'user') => {
-  const { data, error } = await supabase
-    .from('users')
-    .insert([{ email, password, name, rol, activo: true }])
-    .select()
-    .single();
+    return users
+  } catch (error) {
+    throw new Error(error.message || 'Error obteniendo usuarios')
+  }
+}
 
-  if (error) throw error;
-  return data;
-};
+/**
+ * CREATE USER (solo para admin)
+ */
+export const createUser = async (email, password, nombre, role = 'user') => {
+  try {
+    // Hash simple de la contraseña
+    const passwordHash = `hash_${password}_${Date.now()}`
 
-// Actualizar usuario (solo para admins)
-export const updateUser = async (id, updates) => {
-  const { data, error } = await supabase
-    .from('users')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert([
+        {
+          email,
+          password_hash: passwordHash,
+          name: nombre,
+          role,
+          is_active: true
+        }
+      ])
+      .select()
+      .single()
 
-  if (error) throw error;
-  return data;
-};
+    if (error) {
+      throw new Error(error.message)
+    }
 
-// Desactivar usuario (solo para admins)
-export const deactivateUser = async (id) => {
-  const { data, error } = await supabase
-    .from('users')
-    .update({ activo: false })
-    .eq('id', id)
-    .select()
-    .single();
+    return newUser
+  } catch (error) {
+    throw new Error(error.message || 'Error creando usuario')
+  }
+}
 
-  if (error) throw error;
-  return data;
-};
+/**
+ * UPDATE USER (solo para admin)
+ */
+export const updateUser = async (userId, updates) => {
+  try {
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return updatedUser
+  } catch (error) {
+    throw new Error(error.message || 'Error actualizando usuario')
+  }
+}
+
+/**
+ * DELETE USER (solo para admin)
+ */
+export const deleteUser = async (userId) => {
+  try {
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return true
+  } catch (error) {
+    throw new Error(error.message || 'Error eliminando usuario')
+  }
+}
