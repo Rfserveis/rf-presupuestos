@@ -1,38 +1,54 @@
-import { supabase } from './supabase'
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = 'https://lwtsdtjiwfvurquddfqd.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dHNkdGppd2Z2dXJxdWRkZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ1ODMwNTIsImV4cCI6MjA4MDE1OTA1Mn0.aE9OqNLORZs1HhQsjfqNymabkNQJizAkwVanx0D19NU'
+const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export const signIn = async (email, password) => {
   try {
-    const { data: user, error } = await supabase
+    console.log('Intentando login con:', email)
+    
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('email', email)
       .single()
 
-    if (error || !user) {
-      throw new Error('Email no encontrado')
+    console.log('Respuesta Supabase:', { data, error })
+
+    if (error) {
+      console.error('Error Supabase:', error)
+      throw new Error('Usuario no encontrado')
     }
 
-    // Comparación simple de contraseña
-    if (user.password_hash !== password) {
+    if (!data) {
+      throw new Error('Usuario no encontrado')
+    }
+
+    // Comparar contraseña simple
+    if (data.password_hash !== password) {
       throw new Error('Contraseña incorrecta')
     }
 
     const userData = {
-      id: user.id,
-      email: user.email,
-      nombre: user.name,
-      role: user.role === 'admin' ? 'admin' : 'usuario'
+      id: data.id,
+      email: data.email,
+      nombre: data.name,
+      role: data.role === 'admin' ? 'admin' : 'usuario'
     }
 
     localStorage.setItem('rfAuthUser', JSON.stringify(userData))
-    localStorage.setItem('rfAuthToken', `token_${user.id}`)
+    localStorage.setItem('rfAuthToken', `token_${data.id}`)
+
+    console.log('Login exitoso:', userData)
 
     return {
       user: userData,
       profile: userData
     }
   } catch (error) {
-    throw new Error(error.message || 'Error en login')
+    console.error('Error en signIn:', error)
+    throw error
   }
 }
 
@@ -46,8 +62,15 @@ export const getCurrentUser = async () => {
   try {
     const stored = localStorage.getItem('rfAuthUser')
     if (!stored) return null
-    return JSON.parse(stored)
+    const user = JSON.parse(stored)
+    const token = localStorage.getItem('rfAuthToken')
+    if (!token) {
+      localStorage.removeItem('rfAuthUser')
+      return null
+    }
+    return user
   } catch (error) {
+    console.error('Error en getCurrentUser:', error)
     localStorage.removeItem('rfAuthUser')
     localStorage.removeItem('rfAuthToken')
     return null
