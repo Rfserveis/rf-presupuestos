@@ -21,7 +21,7 @@ export const LoginForm = () => {
     setLoading(true)
     const result = await login(loginEmail, loginPassword)
     if (result.success) {
-      setSuccess('Inicio exitoso')
+      setSuccess('Exito')
       setTimeout(() => window.location.href = '/', 1000)
     } else {
       setError(result.message)
@@ -31,13 +31,18 @@ export const LoginForm = () => {
 
   const handleSignup = async (e) => {
     e.preventDefault()
-    setError(null); setSuccess(null); setLoading(true)
+    setError(null)
+    setSuccess(null)
+    setLoading(true)
     if (signupPassword !== signupPasswordConfirm) {
-      setError('Contraseñas no coinciden'); setLoading(false); return
+      setError('No match')
+      setLoading(false)
+      return
     }
     const result = await signup(signupEmail, signupPassword, signupName)
     if (result.success) {
-      setSuccess('Cuenta creada'); setTimeout(() => window.location.href = '/', 1500)
+      setSuccess('OK')
+      setTimeout(() => window.location.href = '/', 1500)
     } else {
       setError(result.message)
     }
@@ -45,39 +50,65 @@ export const LoginForm = () => {
   }
 
   const handleReset = async (e) => {
-    e.preventDefault(); setError(null); setLoading(true)
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
     const result = await resetPassword(resetEmail)
-    if (result.success) { setSuccess(result.message); setResetEmail('') }
-    else { setError(result.message) }
+    if (result.success) {
+      setSuccess(result.message)
+      setResetEmail('')
+    } else {
+      setError(result.message)
+    }
     setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-8">
-        <h1 className="text-3xl font-bold text-center text-gray-800">RF Presupuestos</h1>
-        <div className="flex gap-2 mt-6 mb-6 border-b">
-          <button onClick={() => {setTab('login'); setError(null); setSuccess(null)}} className={`flex-1 py-2 ${tab === 'login' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}>Login</button>
-          <button onClick={() => {setTab('signup'); setError(null); setSuccess(null)}} className={`flex-1 py-2 ${tab === 'signup' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}>Signup</button>
-          <button onClick={() => {setTab('reset'); setError(null); setSuccess(null)}} className={`flex-1 py-2 ${tab === 'reset' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}>Reset</button>
+    <div className="min-h-screen bg-blue-600 flex items-center justify-center">
+      <div className="bg-white p-8 rounded w-96">
+        <h1 className="text-2xl font-bold mb-4">RF Presupuestos</h1>
+        <div className="flex gap-2 mb-4 border-b">
+          <button onClick={() => setTab('login')} className={tab === 'login' ? 'text-blue-600 border-b-2' : ''}>Login</button>
+          <button onClick={() => setTab('signup')} className={tab === 'signup' ? 'text-blue-600 border-b-2' : ''}>Signup</button>
+          <button onClick={() => setTab('reset')} className={tab === 'reset' ? 'text-blue-600 border-b-2' : ''}>Reset</button>
         </div>
-        {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">{error}</div>}
-        {success && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded">{success}</div>}
+        {error && <div className="text-red-600 mb-2">{error}</div>}
+        {success && <div className="text-green-600 mb-2">{success}</div>}
 
-        {tab === 'login' && (<form onSubmit={handleLogin} className="space-y-4"><input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Email" className="w-full px-4 py-2 border rounded" required/><input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Password" className="w-full px-4 py-2 border rounded" required/><button type="submit" className="w-full bg-blue-600 text-white py-2 rounded">{loading ? 'Loading' : 'Login'}</button></form>)}
-        {tab === 'signup' && (<form onSubmit={handleSignup} className="space-y-4"><input type="text" value={signupName} onChange={(e) => setSignupName(e.target.value)} placeholder="Name" className="w-full px-4 py-2 border rounded" required/><input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} placeholder="Email" className="w-full px-4 py-2 border rounded" required/><input type="password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} placeholder="Password" className="w-full px-4 py-2 border rounded" required/><input type="password" value={signupPasswordConfirm} onChange={(e) => setSignupPasswordConfirm(e.target.value)} placeholder="Confirm" className="w-full px-4 py-2 border rounded" required/><button type="submit" className="w-full bg-green-600 text-white py-2 rounded">{loading ? 'Loading' : 'Signup'}</button></form>)}
-        {tab === 'reset' && (<form onSubmit={handleReset} className="space-y-4"><input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="Email" className="w-full px-4 py-2 border rounded" required/><button type="submit" className="w-full bg-orange-600 text-white py-2 rounded">{loading ? 'Loading' : 'Send'}</button></form>)}
+        {tab === 'login' && (
+          <form onSubmit={handleLogin} className="space-y-2">
+            <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Email" className="w-full p-2 border" required />
+            <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Password" className="w-full p-2 border" required />
+            <button type="submit" className="w-full bg-blue-600 text-white p-2">{loading ? 'Loading' : 'Login'}</button>
+          </form>
+        )}
+
+        {tab === 'signup' && (
+          <form onSubmit={handleSignup} className="space-y-2">
+            <input type="text" value={signupName} onChange={(e) => setSignupName(e.target.value)} placeholder="Name" className="w-full p-2 border" required />
+            <input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)} placeholder="Email" className="w-full p-2 border" required />
+            <input type="password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)} placeholder="Password" className="w-full p-2 border" required />
+            <input type="password" value={signupPasswordConfirm} onChange={(e) => setSignupPasswordConfirm(e.target.value)} placeholder="Confirm" className="w-full p-2 border" required />
+            <button type="submit" className="w-full bg-green-600 text-white p-2">{loading ? 'Loading' : 'Signup'}</button>
+          </form>
+        )}
+
+        {tab === 'reset' && (
+          <form onSubmit={handleReset} className="space-y-2">
+            <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="Email" className="w-full p-2 border" required />
+            <button type="submit" className="w-full bg-orange-600 text-white p-2">{loading ? 'Loading' : 'Send'}</button>
+          </form>
+        )}
       </div>
     </div>
   )
 }
 ```
 
-**Clica "Commit changes"**
+7. **Commit changes**
 
 ---
 
 **¿Já ho has fet?**
 ```
-✅ Copia sense react-router-dom pujada a GitHub
-❌ Vull explicació
+✅ ELIMINAT i CREAT novo LoginForm sense react-router-dom
