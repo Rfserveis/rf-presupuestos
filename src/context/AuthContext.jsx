@@ -1,4 +1,4 @@
-// AuthContext.jsx - Versión robusta
+// AuthContext.jsx - Versión simplificada
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 
@@ -19,106 +19,42 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    let mounted = true;
-    
-    const initAuth = async () => {
-      try {
-        // Obtener sesión actual
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Error getting session:', sessionError);
-        }
-        
-        if (mounted) {
-          if (session?.user) {
-            setUser(session.user);
-            await fetchUserProfile(session.user.id);
-          }
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error('Error initializing auth:', err);
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Timeout de seguridad - si no carga en 5 segundos, mostrar login
-    const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('Auth timeout - showing login');
-        setLoading(false);
-      }
-    }, 5000);
-
-    initAuth();
-
-    // Listener para cambios de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event);
-        
-        if (mounted) {
-          if (session?.user) {
-            setUser(session.user);
-            await fetchUserProfile(session.user.id);
-          } else {
-            setUser(null);
-            setUserProfile(null);
-          }
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeout);
-      subscription?.unsubscribe();
-    };
-  }, []);
-
-  const fetchUserProfile = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, email, name, rol')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        // Si no existe en users, crear perfil básico
-        if (error.code === 'PGRST116') {
-          console.log('User profile not found, using basic profile');
-          setUserProfile({
-            id: userId,
-            nombre: 'Usuario',
-            rol: 'usuario'
-          });
-          return;
-        }
-        console.error('Error fetching profile:', error);
-        return;
-      }
-      
-      if (data) {
+    // Verificar sesión inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        // Crear perfil básico desde los datos de auth
         setUserProfile({
-          ...data,
-          nombre: data.name || 'Usuario'
+          id: session.user.id,
+          email: session.user.email,
+          nombre: session.user.email?.split('@')[0] || 'Usuario',
+          rol: session.user.email === 'admin@rfserveis.com' ? 'admin' : 'usuario'
         });
       }
-    } catch (err) {
-      console.error('Error in fetchUserProfile:', err);
-      // Fallback profile
-      setUserProfile({
-        id: userId,
-        nombre: 'Usuario',
-        rol: 'usuario'
-      });
-    }
-  };
+      setLoading(false);
+    });
+
+    // Listener para cambios
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event:', event);
+      
+      if (session?.user) {
+        setUser(session.user);
+        setUserProfile({
+          id: session.user.id,
+          email: session.user.email,
+          nombre: session.user.email?.split('@')[0] || 'Usuario',
+          rol: session.user.email === 'admin@rfserveis.com' ? 'admin' : 'usuario'
+        });
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription?.unsubscribe();
+  }, []);
 
   const signIn = async (email, password) => {
     setError(null);
@@ -132,18 +68,13 @@ export const AuthProvider = ({ children }) => {
 
       if (error) throw error;
 
-      if (data.user) {
-        setUser(data.user);
-        await fetchUserProfile(data.user.id);
-      }
-
+      // El onAuthStateChange se encargará de setear user y profile
       return { success: true, user: data.user };
     } catch (err) {
       console.error('Sign in error:', err);
       setError(err.message);
-      return { success: false, error: err.message };
-    } finally {
       setLoading(false);
+      return { success: false, error: err.message };
     }
   };
 
@@ -155,7 +86,6 @@ export const AuthProvider = ({ children }) => {
       return { success: true };
     } catch (err) {
       console.error('Sign out error:', err);
-      setError(err.message);
       return { success: false, error: err.message };
     }
   };
@@ -168,19 +98,17 @@ export const AuthProvider = ({ children }) => {
     return userProfile?.rol === 'usuario' || !userProfile?.rol;
   };
 
-  const value = {
-    user,
-    userProfile,
-    loading,
-    error,
-    signIn,
-    signOut,
-    isAdmin,
-    isUsuario,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      userProfile,
+      loading,
+      error,
+      signIn,
+      signOut,
+      isAdmin,
+      isUsuario,
+    }}>
       {children}
     </AuthContext.Provider>
   );
