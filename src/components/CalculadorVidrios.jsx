@@ -1,237 +1,281 @@
 // CalculadorVidrios.jsx - Calculador de Vidrios RF Presupuestos
+// Amb espessors correctes per laminat (5+5, 6+6, etc.)
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { createPresupuesto, CATEGORIAS } from '../services/presupuestos';
-import { getClientes, searchClientes } from '../services/clientes';
+import { supabase } from '../services/supabase';
 
-// Datos de ejemplo - En producción vendrían de la BD via Excel upload
+// Tipus de vidre amb els seus espessors disponibles
 const TIPOS_VIDRIO = [
-  { id: 'float', nombre: 'Float / Monolítico', factor: 1.0 },
-  { id: 'templado', nombre: 'Templado', factor: 1.8 },
-  { id: 'laminado', nombre: 'Laminado', factor: 2.2 },
-  { id: 'camara', nombre: 'Cámara / Doble', factor: 2.5 },
+  { 
+    id: 'laminado', 
+    nombre: 'Laminado', 
+    espesores: ['5+5', '6+6', '8+8', '10+10', '12+12'],
+    descripcion: 'Dos vidres units amb butiral'
+  },
+  { 
+    id: 'laminado_templado', 
+    nombre: 'Laminado Templado', 
+    espesores: ['6+6', '8+8', '10+10'],
+    descripcion: 'Laminat amb vidres templats'
+  },
+  { 
+    id: 'templado', 
+    nombre: 'Templado', 
+    espesores: ['6', '8', '10', '12'],
+    descripcion: 'Vidre temperat monolític'
+  },
+  { 
+    id: 'float', 
+    nombre: 'Float / Monolítico', 
+    espesores: ['4', '5', '6', '8', '10'],
+    descripcion: 'Vidre simple'
+  },
 ];
 
-const ESPESORES = [
-  { id: '4', mm: 4, precio_m2: 25 },
-  { id: '6', mm: 6, precio_m2: 32 },
-  { id: '8', mm: 8, precio_m2: 45 },
-  { id: '10', mm: 10, precio_m2: 58 },
-  { id: '12', mm: 12, precio_m2: 72 },
-  { id: '15', mm: 15, precio_m2: 95 },
-  { id: '19', mm: 19, precio_m2: 120 },
-];
+// Preus base per m2 segons tipus i espesor (de TARIFA_VIDRIOS_MASTER)
+const PRECIOS_VIDRIO = {
+  'laminado': {
+    '5+5': { transparente: 35.54, mate: 41.39 },
+    '6+6': { transparente: 38.33, mate: 46.09, gris: 63.95 },
+    '8+8': { transparente: 56.09, mate: 65.85, gris: 90.49 },
+    '10+10': { transparente: 75.39, mate: 87.85, gris: 113.59 },
+    '12+12': { transparente: 113.75, mate: 128.75 }
+  },
+  'laminado_templado': {
+    '6+6': { transparente: 94.00, optico: 109.00, mate: 109.00 },
+    '8+8': { transparente: 110.00, mate: 125.00 },
+    '10+10': { transparente: 135.00, mate: 150.00 }
+  },
+  'templado': {
+    '6': { transparente: 28.00 },
+    '8': { transparente: 35.00 },
+    '10': { transparente: 45.00 },
+    '12': { transparente: 58.00 }
+  },
+  'float': {
+    '4': { transparente: 12.00 },
+    '5': { transparente: 15.00 },
+    '6': { transparente: 18.00 },
+    '8': { transparente: 25.00 },
+    '10': { transparente: 32.00 }
+  }
+};
 
-const COLORES = [
-  { id: 'incoloro', nombre: 'Incoloro', factor: 1.0 },
-  { id: 'bronce', nombre: 'Bronce', factor: 1.15 },
-  { id: 'gris', nombre: 'Gris', factor: 1.15 },
-  { id: 'verde', nombre: 'Verde', factor: 1.20 },
-  { id: 'azul', nombre: 'Azul', factor: 1.25 },
-  { id: 'extraclaro', nombre: 'Extraclaro', factor: 1.30 },
-];
+// Acabats disponibles segons tipus
+const ACABADOS_POR_TIPO = {
+  'laminado': ['transparente', 'mate', 'gris'],
+  'laminado_templado': ['transparente', 'optico', 'mate'],
+  'templado': ['transparente'],
+  'float': ['transparente']
+};
 
-const FORMAS = [
-  { id: 'recto', nombre: 'Rectangular', factor: 1.0 },
-  { id: 'curvo', nombre: 'Curvo', factor: 1.8 },
-  { id: 'triangular', nombre: 'Triangular', factor: 1.3 },
-  { id: 'irregular', nombre: 'Forma Irregular', factor: 1.5 },
-];
+// Preus de cantos segons espesor (de OPERACIONES_VIDRIOS)
+const PRECIOS_CANTOS = {
+  'laminado': {
+    '5+5': { transparente: 1.20, mate: 1.20, gris: 4.27 },
+    '6+6': { transparente: 1.20, mate: 1.20, gris: 4.27 },
+    '8+8': { normal: 2.00 },
+    '10+10': { normal: 2.00 },
+    '12+12': { normal: 2.00 }
+  },
+  'templado': { normal: 2.40 },
+  'laminado_templado': { normal: 0 } // Baros Vision inclou cantos gratis
+};
 
-const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
+// Preus de puntes
+const PRECIOS_PUNTAS = {
+  'laminado': { transparente: 2.00, mate: 2.00, gris: 2.40 },
+  'templado': { normal: 2.80 },
+  'laminado_templado': { normal: 2.80 }
+};
+
+const CalculadorVidrios = ({ onGuardar }) => {
   const { user } = useAuth();
   
-  // Estado del formulario
+  // Estat del formulari
   const [formData, setFormData] = useState({
     ancho: '',
     alto: '',
     cantidad: 1,
-    tipo: 'float',
-    espesor: '6',
-    color: 'incoloro',
-    forma: 'recto',
+    tipo: 'laminado',
+    espesor: '6+6',
+    acabado: 'transparente',
+    forma: 'rectangular',
     cantos: false,
-    tipoCantos: 'pulido',
     puntas: false,
-    agujeros: 0,
-    diametroAgujeros: 10,
+    taladros: 0,
+    diametroTaladro: 50,
   });
 
-  // Estado del cliente
-  const [clienteId, setClienteId] = useState(clientePreseleccionado || null);
-  const [busquedaCliente, setBusquedaCliente] = useState('');
-  const [clientesResultados, setClientesResultados] = useState([]);
-  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
-  const [mostrarBusqueda, setMostrarBusqueda] = useState(false);
-
-  // Estado del cálculo
+  // Espessors disponibles per al tipus seleccionat
+  const [espesoresDisponibles, setEspesoresDisponibles] = useState([]);
+  const [acabadosDisponibles, setAcabadosDisponibles] = useState([]);
+  
+  // Resultat
   const [resultado, setResultado] = useState(null);
-  const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
 
-  // Buscar clientes
+  // Actualitzar espessors quan canvia el tipus
   useEffect(() => {
-    const buscar = async () => {
-      if (busquedaCliente.length >= 2) {
-        const { success, data } = await searchClientes(busquedaCliente);
-        if (success) {
-          setClientesResultados(data);
-          setMostrarBusqueda(true);
-        }
-      } else {
-        setClientesResultados([]);
-        setMostrarBusqueda(false);
+    const tipoSeleccionado = TIPOS_VIDRIO.find(t => t.id === formData.tipo);
+    if (tipoSeleccionado) {
+      setEspesoresDisponibles(tipoSeleccionado.espesores);
+      // Si l'espesor actual no està disponible, seleccionar el primer
+      if (!tipoSeleccionado.espesores.includes(formData.espesor)) {
+        setFormData(prev => ({ ...prev, espesor: tipoSeleccionado.espesores[0] }));
       }
-    };
+    }
     
-    const timer = setTimeout(buscar, 300);
-    return () => clearTimeout(timer);
-  }, [busquedaCliente]);
+    // Actualitzar acabats
+    const acabados = ACABADOS_POR_TIPO[formData.tipo] || ['transparente'];
+    setAcabadosDisponibles(acabados);
+    if (!acabados.includes(formData.acabado)) {
+      setFormData(prev => ({ ...prev, acabado: acabados[0] }));
+    }
+  }, [formData.tipo]);
 
-  // Calcular presupuesto
+  // Calcular
   const calcular = () => {
-    const { ancho, alto, cantidad, tipo, espesor, color, forma, cantos, tipoCantos, puntas, agujeros, diametroAgujeros } = formData;
+    const { ancho, alto, cantidad, tipo, espesor, acabado, forma, cantos, puntas, taladros } = formData;
     
-    if (!ancho || !alto) {
-      setMensaje({ tipo: 'error', texto: 'Introduce las medidas del vidrio' });
+    if (!ancho || !alto || parseFloat(ancho) <= 0 || parseFloat(alto) <= 0) {
+      setMensaje({ tipo: 'error', texto: 'Introdueix les mides del vidre' });
       return;
     }
 
-    // Convertir a metros cuadrados
-    const m2 = (parseFloat(ancho) / 1000) * (parseFloat(alto) / 1000);
-    const m2Total = m2 * parseInt(cantidad);
+    // Calcular m2
+    const anchoM = parseFloat(ancho) / 1000;
+    const altoM = parseFloat(alto) / 1000;
+    const m2Unidad = anchoM * altoM;
+    const m2Total = m2Unidad * parseInt(cantidad);
+    
+    // Perímetre per cantos
+    const perimetroUnidad = 2 * (anchoM + altoM);
+    const perimetroTotal = perimetroUnidad * parseInt(cantidad);
 
-    // Obtener factores
-    const tipoVidrio = TIPOS_VIDRIO.find(t => t.id === tipo);
-    const espesorData = ESPESORES.find(e => e.id === espesor);
-    const colorData = COLORES.find(c => c.id === color);
-    const formaData = FORMAS.find(f => f.id === forma);
+    // Obtenir preu base
+    const preciosEspesor = PRECIOS_VIDRIO[tipo]?.[espesor];
+    if (!preciosEspesor) {
+      setMensaje({ tipo: 'error', texto: 'Combinació tipus/espesor no disponible' });
+      return;
+    }
+    
+    const precioM2 = preciosEspesor[acabado] || preciosEspesor['transparente'] || Object.values(preciosEspesor)[0];
+    let precioBase = precioM2 * m2Total;
+    
+    // Factor forma
+    const factorForma = forma === 'rectangular' ? 1.0 : forma === 'inclinado_pequeño' ? 1.16 : 1.32;
+    precioBase *= factorForma;
 
-    // Calcular precio base
-    let precioBase = espesorData.precio_m2 * m2Total;
-    precioBase *= tipoVidrio.factor;
-    precioBase *= colorData.factor;
-    precioBase *= formaData.factor;
-
-    // Calcular extras
-    let extras = 0;
-    const detalleExtras = [];
+    // Extras
+    const extras = [];
+    let totalExtras = 0;
 
     // Cantos
     if (cantos) {
-      const perimetro = 2 * (parseFloat(ancho) + parseFloat(alto)) / 1000;
-      const precioCantos = tipoCantos === 'pulido' ? 8 : 12; // €/ml
-      const costoCantos = perimetro * precioCantos * parseInt(cantidad);
-      extras += costoCantos;
-      detalleExtras.push({ nombre: `Cantos ${tipoCantos}`, cantidad: `${(perimetro * cantidad).toFixed(2)} ml`, precio: costoCantos });
+      let precioCanto = 2.00; // Per defecte
+      
+      if (tipo === 'laminado') {
+        const preciosCantoEspesor = PRECIOS_CANTOS.laminado[espesor];
+        if (preciosCantoEspesor) {
+          precioCanto = preciosCantoEspesor[acabado] || preciosCantoEspesor['normal'] || 2.00;
+        }
+      } else if (tipo === 'templado') {
+        precioCanto = 2.40;
+      } else if (tipo === 'laminado_templado') {
+        precioCanto = 0; // Inclòs
+      }
+      
+      const costoCantos = perimetroTotal * precioCanto;
+      if (costoCantos > 0) {
+        extras.push({
+          nombre: 'Cantos pulits',
+          detalle: `${perimetroTotal.toFixed(2)} ml x ${precioCanto.toFixed(2)} €/ml`,
+          precio: costoCantos
+        });
+        totalExtras += costoCantos;
+      } else if (tipo === 'laminado_templado') {
+        extras.push({
+          nombre: 'Cantos pulits',
+          detalle: 'Inclòs amb Baros Vision',
+          precio: 0
+        });
+      }
     }
 
-    // Puntas
+    // Puntes
     if (puntas) {
-      const costoPuntas = 4 * 3 * parseInt(cantidad); // 4 puntas x 3€
-      extras += costoPuntas;
-      detalleExtras.push({ nombre: 'Puntas matadas', cantidad: `${4 * cantidad} uds`, precio: costoPuntas });
+      const numPuntas = 4 * parseInt(cantidad);
+      let precioPunta = 2.00;
+      
+      if (tipo === 'laminado' && acabado === 'gris') {
+        precioPunta = 2.40;
+      } else if (tipo === 'templado' || tipo === 'laminado_templado') {
+        precioPunta = 2.80;
+      }
+      
+      const costoPuntas = numPuntas * precioPunta;
+      extras.push({
+        nombre: 'Puntes roma',
+        detalle: `${numPuntas} uds x ${precioPunta.toFixed(2)} €/ud`,
+        precio: costoPuntas
+      });
+      totalExtras += costoPuntas;
     }
 
-    // Agujeros (solo en templado)
-    if (agujeros > 0 && tipo === 'templado') {
-      const costoAgujeros = parseInt(agujeros) * 15 * parseInt(cantidad);
-      extras += costoAgujeros;
-      detalleExtras.push({ nombre: `Agujeros Ø${diametroAgujeros}mm`, cantidad: `${agujeros * cantidad} uds`, precio: costoAgujeros });
+    // Taladros (només templat o laminat templat)
+    if (taladros > 0 && (tipo === 'templado' || tipo === 'laminado_templado')) {
+      const numTaladros = parseInt(taladros) * parseInt(cantidad);
+      const precioTaladro = formData.diametroTaladro <= 50 ? 5.50 : 8.00;
+      const costoTaladros = numTaladros * precioTaladro;
+      
+      extras.push({
+        nombre: `Forats Ø${formData.diametroTaladro}mm`,
+        detalle: `${numTaladros} uds x ${precioTaladro.toFixed(2)} €/ud`,
+        precio: costoTaladros
+      });
+      totalExtras += costoTaladros;
     }
 
-    const subtotal = precioBase + extras;
+    const subtotal = precioBase + totalExtras;
     const iva = subtotal * 0.21;
     const total = subtotal + iva;
 
     setResultado({
-      m2_unidad: m2,
-      m2_total: m2Total,
-      precio_base: precioBase,
-      extras: detalleExtras,
-      total_extras: extras,
+      medidas: `${ancho} x ${alto} mm`,
+      cantidad: parseInt(cantidad),
+      m2Unidad,
+      m2Total,
+      tipo: TIPOS_VIDRIO.find(t => t.id === tipo)?.nombre,
+      espesor,
+      acabado: acabado.charAt(0).toUpperCase() + acabado.slice(1),
+      forma: forma === 'rectangular' ? 'Rectangular' : forma === 'inclinado_pequeño' ? 'Inclinat petit (+16%)' : 'Inclinat gran (+32%)',
+      precioM2,
+      precioBase,
+      extras,
+      totalExtras,
       subtotal,
       iva,
-      total,
-      desglose: {
-        tipo: tipoVidrio.nombre,
-        espesor: `${espesorData.mm}mm`,
-        color: colorData.nombre,
-        forma: formaData.nombre,
-        cantidad: parseInt(cantidad),
-        medidas: `${ancho} x ${alto} mm`
-      }
+      total
     });
-
+    
     setMensaje(null);
   };
 
-  // Guardar presupuesto
-  const guardarPresupuesto = async () => {
-    if (!resultado) {
-      setMensaje({ tipo: 'error', texto: 'Primero calcula el presupuesto' });
-      return;
-    }
-
-    if (!clienteId && !clienteSeleccionado) {
-      setMensaje({ tipo: 'error', texto: 'Selecciona un cliente' });
-      return;
-    }
-
-    setGuardando(true);
-
-    try {
-      const presupuesto = {
-        categoria: CATEGORIAS.VIDRIOS,
-        cliente_id: clienteId || clienteSeleccionado?.id,
-        datos: {
-          formData,
-          resultado
-        },
-        subtotal: resultado.subtotal,
-        iva: 21,
-        total: resultado.total,
-        created_by: user?.id
-      };
-
-      const { success, data, error } = await createPresupuesto(presupuesto);
-
-      if (success) {
-        setMensaje({ tipo: 'success', texto: `Presupuesto ${data.numero} guardado correctamente` });
-        if (onGuardar) onGuardar(data);
-      } else {
-        setMensaje({ tipo: 'error', texto: error || 'Error al guardar' });
-      }
-    } catch (err) {
-      setMensaje({ tipo: 'error', texto: 'Error al guardar el presupuesto' });
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  // Seleccionar cliente
-  const seleccionarCliente = (cliente) => {
-    setClienteSeleccionado(cliente);
-    setClienteId(cliente.id);
-    setBusquedaCliente(cliente.nombre);
-    setMostrarBusqueda(false);
-  };
-
-  // Limpiar formulario
+  // Netejar
   const limpiar = () => {
     setFormData({
       ancho: '',
       alto: '',
       cantidad: 1,
-      tipo: 'float',
-      espesor: '6',
-      color: 'incoloro',
-      forma: 'recto',
+      tipo: 'laminado',
+      espesor: '6+6',
+      acabado: 'transparente',
+      forma: 'rectangular',
       cantos: false,
-      tipoCantos: 'pulido',
       puntas: false,
-      agujeros: 0,
-      diametroAgujeros: 10,
+      taladros: 0,
+      diametroTaladro: 50,
     });
     setResultado(null);
     setMensaje(null);
@@ -242,65 +286,21 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <span className="text-2xl">🪟</span>
-          Calculador de Vidrios
+          🪟 Calculador de Vidres
         </h2>
-        <p className="text-blue-100 text-sm mt-1">Calcula presupuestos de vidrio rápidamente</p>
+        <p className="text-blue-100 text-sm mt-1">Preus segons TARIFA_VIDRIOS_MASTER</p>
       </div>
 
       <div className="p-6">
-        {/* Mensaje */}
-        {mensaje && (
-          <div className={`mb-4 p-4 rounded-lg ${
-            mensaje.tipo === 'error' ? 'bg-red-50 text-red-700 border border-red-200' :
-            mensaje.tipo === 'success' ? 'bg-green-50 text-green-700 border border-green-200' :
-            'bg-blue-50 text-blue-700 border border-blue-200'
-          }`}>
-            {mensaje.texto}
-          </div>
-        )}
-
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Columna izquierda - Formulario */}
-          <div className="space-y-6">
-            {/* Selector de Cliente */}
-            <div className="relative">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-              <input
-                type="text"
-                value={busquedaCliente}
-                onChange={(e) => setBusquedaCliente(e.target.value)}
-                placeholder="Buscar cliente por nombre o empresa..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              {mostrarBusqueda && clientesResultados.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-auto">
-                  {clientesResultados.map(cliente => (
-                    <button
-                      key={cliente.id}
-                      onClick={() => seleccionarCliente(cliente)}
-                      className="w-full px-4 py-2 text-left hover:bg-blue-50 flex justify-between items-center"
-                    >
-                      <span className="font-medium">{cliente.nombre}</span>
-                      {cliente.empresa && <span className="text-gray-500 text-sm">{cliente.empresa}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {clienteSeleccionado && (
-                <div className="mt-2 text-sm text-green-600 flex items-center gap-1">
-                  ✓ Cliente: {clienteSeleccionado.nombre}
-                  {clienteSeleccionado.empresa && ` (${clienteSeleccionado.empresa})`}
-                </div>
-              )}
-            </div>
-
-            {/* Medidas */}
+          {/* Columna esquerra - Formulari */}
+          <div className="space-y-4">
+            {/* Mides */}
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-gray-800 mb-3">📐 Medidas</h3>
+              <h3 className="font-semibold text-gray-800 mb-3">📐 Mides</h3>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Ancho (mm)</label>
+                  <label className="block text-xs text-gray-600 mb-1">Ample (mm)</label>
                   <input
                     type="number"
                     value={formData.ancho}
@@ -310,7 +310,7 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Alto (mm)</label>
+                  <label className="block text-xs text-gray-600 mb-1">Alt (mm)</label>
                   <input
                     type="number"
                     value={formData.alto}
@@ -320,7 +320,7 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Cantidad</label>
+                  <label className="block text-xs text-gray-600 mb-1">Quantitat</label>
                   <input
                     type="number"
                     min="1"
@@ -332,22 +332,31 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
               </div>
             </div>
 
-            {/* Especificaciones */}
+            {/* Tipus de vidre */}
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-gray-800 mb-3">⚙️ Especificaciones</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Tipo de Vidrio</label>
-                  <select
-                    value={formData.tipo}
-                    onChange={(e) => setFormData({...formData, tipo: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              <h3 className="font-semibold text-gray-800 mb-3">🔍 Tipus de Vidre</h3>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {TIPOS_VIDRIO.map(tipo => (
+                  <button
+                    key={tipo.id}
+                    onClick={() => setFormData({...formData, tipo: tipo.id})}
+                    className={`p-3 rounded-lg text-left transition-all ${
+                      formData.tipo === tipo.id
+                        ? 'bg-blue-100 border-2 border-blue-500'
+                        : 'bg-white border-2 border-gray-200 hover:border-blue-300'
+                    }`}
                   >
-                    {TIPOS_VIDRIO.map(t => (
-                      <option key={t.id} value={t.id}>{t.nombre}</option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="font-medium text-sm">{tipo.nombre}</div>
+                    <div className="text-xs text-gray-500">{tipo.descripcion}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Espesor i Acabat */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-semibold text-gray-800 mb-3">📏 Especificacions</h3>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Espesor</label>
                   <select
@@ -355,105 +364,113 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
                     onChange={(e) => setFormData({...formData, espesor: e.target.value})}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {ESPESORES.map(e => (
-                      <option key={e.id} value={e.id}>{e.mm} mm</option>
+                    {espesoresDisponibles.map(esp => (
+                      <option key={esp} value={esp}>{esp} mm</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Color</label>
+                  <label className="block text-xs text-gray-600 mb-1">Acabat</label>
                   <select
-                    value={formData.color}
-                    onChange={(e) => setFormData({...formData, color: e.target.value})}
+                    value={formData.acabado}
+                    onChange={(e) => setFormData({...formData, acabado: e.target.value})}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {COLORES.map(c => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">Forma</label>
-                  <select
-                    value={formData.forma}
-                    onChange={(e) => setFormData({...formData, forma: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    {FORMAS.map(f => (
-                      <option key={f.id} value={f.id}>{f.nombre}</option>
+                    {acabadosDisponibles.map(ac => (
+                      <option key={ac} value={ac}>
+                        {ac.charAt(0).toUpperCase() + ac.slice(1)}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
+              
+              {/* Forma */}
+              <div className="mt-3">
+                <label className="block text-xs text-gray-600 mb-1">Forma</label>
+                <select
+                  value={formData.forma}
+                  onChange={(e) => setFormData({...formData, forma: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="rectangular">Rectangular (sense recàrrec)</option>
+                  <option value="inclinado_pequeño">Inclinat petit (+16%)</option>
+                  <option value="inclinado_grande">Inclinat gran (+32%)</option>
+                </select>
+              </div>
             </div>
 
-            {/* Procesos adicionales */}
+            {/* Processos adicionals */}
             <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-gray-800 mb-3">🔧 Procesos Adicionales</h3>
+              <h3 className="font-semibold text-gray-800 mb-3">🔧 Processos Adicionals</h3>
               <div className="space-y-3">
                 {/* Cantos */}
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.cantos}
-                      onChange={(e) => setFormData({...formData, cantos: e.target.checked})}
-                      className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm">Cantos</span>
-                  </label>
-                  {formData.cantos && (
-                    <select
-                      value={formData.tipoCantos}
-                      onChange={(e) => setFormData({...formData, tipoCantos: e.target.value})}
-                      className="px-3 py-1 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="pulido">Pulido (8€/ml)</option>
-                      <option value="biselado">Biselado (12€/ml)</option>
-                    </select>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.cantos}
+                    onChange={(e) => setFormData({...formData, cantos: e.target.checked})}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm">Cantos pulits</span>
+                  {formData.tipo === 'laminado_templado' && (
+                    <span className="text-xs text-green-600 ml-2">(Inclòs amb Baros Vision)</span>
                   )}
-                </div>
+                </label>
 
-                {/* Puntas */}
-                <label className="flex items-center gap-2">
+                {/* Puntes */}
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.puntas}
                     onChange={(e) => setFormData({...formData, puntas: e.target.checked})}
                     className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
                   />
-                  <span className="text-sm">Puntas matadas (3€/ud)</span>
+                  <span className="text-sm">Puntes roma (4 per peça)</span>
                 </label>
 
-                {/* Agujeros */}
-                {formData.tipo === 'templado' && (
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm">Agujeros:</label>
+                {/* Taladros (només templat) */}
+                {(formData.tipo === 'templado' || formData.tipo === 'laminado_templado') && (
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm">Forats:</label>
                     <input
                       type="number"
                       min="0"
-                      value={formData.agujeros}
-                      onChange={(e) => setFormData({...formData, agujeros: e.target.value})}
+                      value={formData.taladros}
+                      onChange={(e) => setFormData({...formData, taladros: e.target.value})}
                       className="w-20 px-3 py-1 border rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
-                    {formData.agujeros > 0 && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Ø</span>
-                        <input
-                          type="number"
-                          value={formData.diametroAgujeros}
-                          onChange={(e) => setFormData({...formData, diametroAgujeros: e.target.value})}
-                          className="w-16 px-2 py-1 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-600">mm</span>
-                      </div>
+                    {formData.taladros > 0 && (
+                      <select
+                        value={formData.diametroTaladro}
+                        onChange={(e) => setFormData({...formData, diametroTaladro: parseInt(e.target.value)})}
+                        className="px-2 py-1 border rounded-lg text-sm"
+                      >
+                        <option value="50">Ø ≤50mm (5.50€)</option>
+                        <option value="100">Ø 50-100mm (8.00€)</option>
+                      </select>
                     )}
                   </div>
+                )}
+                
+                {formData.tipo === 'laminado' && formData.taladros > 0 && (
+                  <p className="text-xs text-orange-600">
+                    ⚠️ Els forats només es poden fer en vidre templat
+                  </p>
                 )}
               </div>
             </div>
 
-            {/* Botones */}
+            {/* Missatge */}
+            {mensaje && (
+              <div className={`p-3 rounded-lg ${
+                mensaje.tipo === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+              }`}>
+                {mensaje.texto}
+              </div>
+            )}
+
+            {/* Botons */}
             <div className="flex gap-3">
               <button
                 onClick={calcular}
@@ -465,44 +482,46 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
                 onClick={limpiar}
                 className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                🗑️ Limpiar
+                🗑️ Netejar
               </button>
             </div>
           </div>
 
-          {/* Columna derecha - Resultado */}
+          {/* Columna dreta - Resultat */}
           <div>
             {resultado ? (
               <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-6 sticky top-4">
-                <h3 className="font-bold text-lg text-gray-800 mb-4">📋 Resumen del Presupuesto</h3>
+                <h3 className="font-bold text-lg text-gray-800 mb-4">📋 Resum del Pressupost</h3>
                 
-                {/* Desglose */}
+                {/* Desglossament */}
                 <div className="bg-white rounded-lg p-4 mb-4">
                   <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="text-gray-600">Tipo:</div>
-                    <div className="font-medium">{resultado.desglose.tipo}</div>
+                    <div className="text-gray-600">Tipus:</div>
+                    <div className="font-medium">{resultado.tipo}</div>
                     <div className="text-gray-600">Espesor:</div>
-                    <div className="font-medium">{resultado.desglose.espesor}</div>
-                    <div className="text-gray-600">Color:</div>
-                    <div className="font-medium">{resultado.desglose.color}</div>
+                    <div className="font-medium">{resultado.espesor} mm</div>
+                    <div className="text-gray-600">Acabat:</div>
+                    <div className="font-medium">{resultado.acabado}</div>
                     <div className="text-gray-600">Forma:</div>
-                    <div className="font-medium">{resultado.desglose.forma}</div>
-                    <div className="text-gray-600">Medidas:</div>
-                    <div className="font-medium">{resultado.desglose.medidas}</div>
-                    <div className="text-gray-600">Cantidad:</div>
-                    <div className="font-medium">{resultado.desglose.cantidad} uds</div>
-                    <div className="text-gray-600">m² por unidad:</div>
-                    <div className="font-medium">{resultado.m2_unidad.toFixed(3)} m²</div>
+                    <div className="font-medium">{resultado.forma}</div>
+                    <div className="text-gray-600">Mides:</div>
+                    <div className="font-medium">{resultado.medidas}</div>
+                    <div className="text-gray-600">Quantitat:</div>
+                    <div className="font-medium">{resultado.cantidad} uds</div>
+                    <div className="text-gray-600">m² per unitat:</div>
+                    <div className="font-medium">{resultado.m2Unidad.toFixed(3)} m²</div>
                     <div className="text-gray-600">m² total:</div>
-                    <div className="font-medium">{resultado.m2_total.toFixed(3)} m²</div>
+                    <div className="font-medium">{resultado.m2Total.toFixed(3)} m²</div>
+                    <div className="text-gray-600">Preu/m²:</div>
+                    <div className="font-medium">{resultado.precioM2.toFixed(2)} €/m²</div>
                   </div>
                 </div>
 
-                {/* Precios */}
+                {/* Preus */}
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between text-sm">
-                    <span>Vidrio base:</span>
-                    <span className="font-medium">{resultado.precio_base.toFixed(2)} €</span>
+                    <span>Vidre base ({resultado.m2Total.toFixed(2)} m²):</span>
+                    <span className="font-medium">{resultado.precioBase.toFixed(2)} €</span>
                   </div>
                   
                   {resultado.extras.length > 0 && (
@@ -510,7 +529,10 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
                       <div className="text-sm text-gray-600 mb-1">Extras:</div>
                       {resultado.extras.map((extra, idx) => (
                         <div key={idx} className="flex justify-between text-sm pl-2">
-                          <span className="text-gray-600">{extra.nombre} ({extra.cantidad}):</span>
+                          <span className="text-gray-600">
+                            {extra.nombre}
+                            <span className="text-xs text-gray-400 ml-1">({extra.detalle})</span>
+                          </span>
                           <span>{extra.precio.toFixed(2)} €</span>
                         </div>
                       ))}
@@ -530,37 +552,19 @@ const CalculadorVidrios = ({ onGuardar, clientePreseleccionado }) => {
                 </div>
 
                 {/* Total */}
-                <div className="bg-blue-600 text-white rounded-lg p-4 mb-4">
+                <div className="bg-blue-600 text-white rounded-lg p-4">
                   <div className="flex justify-between items-center">
                     <span className="text-lg font-bold">TOTAL:</span>
                     <span className="text-2xl font-bold">{resultado.total.toFixed(2)} €</span>
                   </div>
                 </div>
-
-                {/* Botón guardar */}
-                <button
-                  onClick={guardarPresupuesto}
-                  disabled={guardando}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
-                >
-                  {guardando ? (
-                    <>
-                      <span className="animate-spin">⏳</span>
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      💾 Guardar Presupuesto
-                    </>
-                  )}
-                </button>
               </div>
             ) : (
-              <div className="bg-gray-50 rounded-lg p-6 text-center text-gray-500 h-full flex items-center justify-center">
+              <div className="bg-gray-50 rounded-lg p-6 text-center text-gray-500 h-full flex items-center justify-center min-h-[400px]">
                 <div>
-                  <div className="text-4xl mb-3">📊</div>
-                  <p>Introduce los datos y pulsa <strong>Calcular</strong></p>
-                  <p className="text-sm mt-2">El resultado aparecerá aquí</p>
+                  <div className="text-5xl mb-3">📊</div>
+                  <p>Introdueix les dades i prem <strong>Calcular</strong></p>
+                  <p className="text-sm mt-2">El resultat apareixerà aquí</p>
                 </div>
               </div>
             )}
