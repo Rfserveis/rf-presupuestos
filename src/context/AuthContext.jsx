@@ -1,6 +1,4 @@
-// AuthContext.jsx - CORREGIDO para tu estructura de BD
-// La tabla users tiene 'name' en lugar de 'nombre'
-
+// AuthContext.jsx - Versión robusta
 import { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 
@@ -21,39 +19,67 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    checkSession();
+    let mounted = true;
     
+    const initAuth = async () => {
+      try {
+        // Obtener sesión actual
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Error getting session:', sessionError);
+        }
+        
+        if (mounted) {
+          if (session?.user) {
+            setUser(session.user);
+            await fetchUserProfile(session.user.id);
+          }
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('Error initializing auth:', err);
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Timeout de seguridad - si no carga en 5 segundos, mostrar login
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth timeout - showing login');
+        setLoading(false);
+      }
+    }, 5000);
+
+    initAuth();
+
+    // Listener para cambios de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session?.user) {
-          setUser(session.user);
-          await fetchUserProfile(session.user.id);
-        } else {
-          setUser(null);
-          setUserProfile(null);
+        console.log('Auth state changed:', event);
+        
+        if (mounted) {
+          if (session?.user) {
+            setUser(session.user);
+            await fetchUserProfile(session.user.id);
+          } else {
+            setUser(null);
+            setUserProfile(null);
+          }
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      subscription?.unsubscribe();
+    };
   }, []);
 
-  const checkSession = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        await fetchUserProfile(session.user.id);
-      }
-    } catch (err) {
-      console.error('Error verificando sesión:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // CORREGIDO: usa 'name' en lugar de 'nombre'
   const fetchUserProfile = async (userId) => {
     try {
       const { data, error } = await supabase
@@ -62,21 +88,35 @@ export const AuthProvider = ({ children }) => {
         .eq('id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error obteniendo perfil:', error);
+      if (error) {
+        // Si no existe en users, crear perfil básico
+        if (error.code === 'PGRST116') {
+          console.log('User profile not found, using basic profile');
+          setUserProfile({
+            id: userId,
+            nombre: 'Usuario',
+            rol: 'usuario'
+          });
+          return;
+        }
+        console.error('Error fetching profile:', error);
+        return;
       }
       
-      // Mapear 'name' a 'nombre' para compatibilidad
       if (data) {
         setUserProfile({
           ...data,
-          nombre: data.name // Alias para compatibilidad
+          nombre: data.name || 'Usuario'
         });
-      } else {
-        setUserProfile(null);
       }
     } catch (err) {
-      console.error('Error fetchUserProfile:', err);
+      console.error('Error in fetchUserProfile:', err);
+      // Fallback profile
+      setUserProfile({
+        id: userId,
+        nombre: 'Usuario',
+        rol: 'usuario'
+      });
     }
   };
 
@@ -99,6 +139,7 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true, user: data.user };
     } catch (err) {
+      console.error('Sign in error:', err);
       setError(err.message);
       return { success: false, error: err.message };
     } finally {
@@ -107,19 +148,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
-    setLoading(true);
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
+      await supabase.auth.signOut();
       setUser(null);
       setUserProfile(null);
       return { success: true };
     } catch (err) {
+      console.error('Sign out error:', err);
       setError(err.message);
       return { success: false, error: err.message };
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -140,7 +177,6 @@ export const AuthProvider = ({ children }) => {
     signOut,
     isAdmin,
     isUsuario,
-    checkSession,
   };
 
   return (
