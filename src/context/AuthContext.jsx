@@ -1,3 +1,4 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
 
@@ -11,7 +12,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState('user'); // admin | user
+  const [role, setRole] = useState('user'); // 'admin' | 'user'
   const [loading, setLoading] = useState(true);
 
   const isAdmin = role === 'admin';
@@ -23,8 +24,7 @@ export function AuthProvider({ children }) {
       id: user.id,
       email,
       nombre: email ? email.split('@')[0] : 'Usuario',
-      // OJO: aquí mostramos el rol real, no "usuario" fijo
-      role: role,
+      role,       // <-- rol REAL: 'admin' o 'user'
       isAdmin,
     };
   }, [user, role, isAdmin]);
