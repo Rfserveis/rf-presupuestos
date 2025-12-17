@@ -1,4 +1,3 @@
-// AuthContext.jsx - Roles desde Supabase (public.user_roles)
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
 
@@ -12,7 +11,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState('user'); // 'admin' | 'user'
+  const [role, setRole] = useState('user'); // admin | user
   const [loading, setLoading] = useState(true);
 
   const isAdmin = role === 'admin';
@@ -24,10 +23,11 @@ export function AuthProvider({ children }) {
       id: user.id,
       email,
       nombre: email ? email.split('@')[0] : 'Usuario',
-      role: isAdmin ? 'admin' : 'usuario',
+      // OJO: aquí mostramos el rol real, no "usuario" fijo
+      role: role,
       isAdmin,
     };
-  }, [user, isAdmin]);
+  }, [user, role, isAdmin]);
 
   const fetchRole = async (u) => {
     if (!u?.id) {
@@ -35,23 +35,29 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', u.id)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', u.id)
+        .maybeSingle();
 
-    if (error) {
-      console.error('[user_roles] error:', error);
+      if (error) {
+        console.error('[user_roles] error:', error);
+        setRole('user');
+        return;
+      }
+
+      setRole(data?.role === 'admin' ? 'admin' : 'user');
+    } catch (e) {
+      console.error('Error inesperado leyendo rol:', e);
       setRole('user');
-      return;
     }
-
-    setRole(data?.role === 'admin' ? 'admin' : 'user');
   };
 
   useEffect(() => {
     const init = async () => {
+      setLoading(true);
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) console.error('[getSession] error:', error);
@@ -71,6 +77,7 @@ export function AuthProvider({ children }) {
     init();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setLoading(true);
       const u = session?.user || null;
       setUser(u);
       await fetchRole(u);
