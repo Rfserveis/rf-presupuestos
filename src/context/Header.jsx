@@ -1,4 +1,4 @@
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from './AuthContext';
 
 export default function Header() {
   const { profile, isAdmin, signOut } = useAuth();
@@ -17,16 +17,17 @@ export default function Header() {
         </div>
 
         {/* Navegacion */}
-        <nav className="flex items-center gap-6">
-          <span className="text-gray-700 text-sm">
-            {profile?.nombre}
-          </span>
+        <nav className="flex items-center gap-4">
+          <div className="text-right">
+            <div className="text-sm text-slate-800 font-semibold">
+              {profile?.nombre || 'Usuario'}
+            </div>
+            <div className="text-xs text-gray-500">
+              {isAdmin ? 'Administrador' : 'Usuario'}
+            </div>
+          </div>
 
-          <span className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">
-            {isAdmin ? 'Administrador' : 'Usuario'}
-          </span>
-
-          {/* BOTON SOLO ADMIN */}
+          {/* Texto/boton visible solo para admin */}
           {isAdmin && (
             <span className="text-sm font-semibold text-blue-600">
               Panel Admin
