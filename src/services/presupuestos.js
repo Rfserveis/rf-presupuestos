@@ -1,14 +1,11 @@
 // Servicio de Presupuestos - CRUD en Supabase
 import { supabase } from './supabase';
 
-// Categorías de presupuestos disponibles
+// ✅ Categorías ACTIVAS (solo las que quieres)
 export const CATEGORIAS = {
   VIDRIOS: 'vidrios',
-  BARANDILLAS_ALL_GLASS: 'barandillas_all_glass',
-  BARANDILLAS_TOP_GLASS: 'barandillas_top_glass',
   MARQUESINAS: 'marquesinas',
-  ESCALERAS_DOPERA: 'escaleras_dopera',
-  ESCALERAS_RF: 'escaleras_rf',
+  BARANDILLAS_TOP_GLASS: 'barandillas_top_glass',
   ESCALERAS_RETRACTILES: 'escaleras_retractiles'
 };
 
@@ -36,21 +33,11 @@ export const getPresupuestos = async (filtros = {}) => {
       .order('created_at', { ascending: false });
 
     // Aplicar filtros
-    if (filtros.proyecto_id) {
-      query = query.eq('proyecto_id', filtros.proyecto_id);
-    }
-    if (filtros.cliente_id) {
-      query = query.eq('cliente_id', filtros.cliente_id);
-    }
-    if (filtros.categoria) {
-      query = query.eq('categoria', filtros.categoria);
-    }
-    if (filtros.estado) {
-      query = query.eq('estado', filtros.estado);
-    }
-    if (filtros.limit) {
-      query = query.limit(filtros.limit);
-    }
+    if (filtros.proyecto_id) query = query.eq('proyecto_id', filtros.proyecto_id);
+    if (filtros.cliente_id) query = query.eq('cliente_id', filtros.cliente_id);
+    if (filtros.categoria) query = query.eq('categoria', filtros.categoria);
+    if (filtros.estado) query = query.eq('estado', filtros.estado);
+    if (filtros.limit) query = query.limit(filtros.limit);
 
     const { data, error } = await query;
 
@@ -125,7 +112,7 @@ export const createPresupuesto = async (presupuesto) => {
 const generarNumeroPresupuesto = async (categoria) => {
   const year = new Date().getFullYear();
   const prefix = categoria.substring(0, 3).toUpperCase();
-  
+
   // Obtener el último número de esta categoría y año
   const { data } = await supabase
     .from('presupuestos')
@@ -138,7 +125,7 @@ const generarNumeroPresupuesto = async (categoria) => {
   if (data && data.length > 0) {
     const ultimoNumero = data[0].numero;
     const partes = ultimoNumero.split('-');
-    secuencia = parseInt(partes[2]) + 1;
+    secuencia = parseInt(partes[2], 10) + 1;
   }
 
   return `${prefix}-${year}-${secuencia.toString().padStart(4, '0')}`;
@@ -214,7 +201,7 @@ export const duplicarPresupuesto = async (id, nuevoClienteId = null) => {
 
     // Crear copia
     const numero = await generarNumeroPresupuesto(original.categoria);
-    
+
     const { data, error } = await supabase
       .from('presupuestos')
       .insert([{
@@ -248,7 +235,7 @@ export const deletePresupuesto = async (id) => {
   try {
     const { error } = await supabase
       .from('presupuestos')
-      .update({ 
+      .update({
         estado: 'cancelado',
         updated_at: new Date().toISOString()
       })
@@ -266,8 +253,8 @@ export const deletePresupuesto = async (id) => {
 export const getPresupuestosStats = async (periodo = 'mes') => {
   try {
     let fechaInicio = new Date();
-    
-    switch(periodo) {
+
+    switch (periodo) {
       case 'semana':
         fechaInicio.setDate(fechaInicio.getDate() - 7);
         break;
@@ -302,7 +289,7 @@ export const getPresupuestosStats = async (periodo = 'mes') => {
     data.forEach(p => {
       // Por estado
       stats.por_estado[p.estado] = (stats.por_estado[p.estado] || 0) + 1;
-      
+
       // Por categoría
       if (!stats.por_categoria[p.categoria]) {
         stats.por_categoria[p.categoria] = { count: 0, importe: 0 };
