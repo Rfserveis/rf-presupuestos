@@ -105,7 +105,7 @@ function Acceso() {
       </div>
 
       <div className="mt-6 text-xs text-gray-500">
-        (Esto es solo una pantalla de información. Si luego quieres gestionar permisos, aquí meteremos cosas.)
+        (Pantalla informativa. Aquí luego podemos meter gestión de permisos, etc.)
       </div>
     </div>
   );
@@ -119,14 +119,27 @@ function Dashboard() {
 
   const [currentView, setCurrentView] = useState('calculadores'); // calculadores | acceso | admin
   const [calculadorActivo, setCalculadorActivo] = useState('vidrios');
+  const [banner, setBanner] = useState('');
 
-  // ✅ SOLO los 4 activos
+  // ✅ Los 7 aparecen, pero solo 4 activos
   const calculadores = [
-    { id: 'vidrios', nombre: 'Vidrios', icono: '🪟' },
-    { id: 'marquesinas', nombre: 'Marquesinas', icono: '☂️' },
-    { id: 'topglass', nombre: 'Barandillas Top Glass', icono: '🔒' },
-    { id: 'retractiles', nombre: 'Escaleras Retráctiles', icono: '🪜' },
+    { id: 'vidrios', nombre: 'Vidrios', icono: '🪟', activo: true },
+    { id: 'allglass', nombre: 'Barandillas All Glass', icono: '🧊', activo: false },
+    { id: 'topglass', nombre: 'Barandillas Top Glass', icono: '🔒', activo: true },
+    { id: 'marquesinas', nombre: 'Marquesinas', icono: '☂️', activo: true },
+    { id: 'opera', nombre: 'Escaleras D’Opera', icono: '🪜', activo: false },
+    { id: 'rf', nombre: 'Escaleras RF', icono: '🪜', activo: false },
+    { id: 'retractiles', nombre: 'Escaleras Retráctiles', icono: '🪜', activo: true },
   ];
+
+  const selectCalculador = (calc) => {
+    if (!calc.activo) {
+      setBanner(`"${calc.nombre}" estará disponible próximamente.`);
+      return;
+    }
+    setBanner('');
+    setCalculadorActivo(calc.id);
+  };
 
   const renderCalculador = () => {
     switch (calculadorActivo) {
@@ -215,23 +228,43 @@ function Dashboard() {
 
         {currentView === 'calculadores' && (
           <div className="space-y-6">
+            {banner && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-xl">
+                {banner}
+              </div>
+            )}
+
             {/* Selector de calculadores */}
             <div className="bg-white rounded-xl shadow-sm p-4">
               <div className="flex flex-wrap gap-2">
-                {calculadores.map((calc) => (
-                  <button
-                    key={calc.id}
-                    onClick={() => setCalculadorActivo(calc.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
-                      calculadorActivo === calc.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <span>{calc.icono}</span>
-                    <span className="hidden sm:inline">{calc.nombre}</span>
-                  </button>
-                ))}
+                {calculadores.map((calc) => {
+                  const isSelected = calculadorActivo === calc.id;
+
+                  const base =
+                    'px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2';
+                  const enabled = isSelected
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+                  const disabled =
+                    'bg-gray-50 text-gray-400 border border-dashed border-gray-300 cursor-not-allowed';
+
+                  return (
+                    <button
+                      key={calc.id}
+                      onClick={() => selectCalculador(calc)}
+                      className={`${base} ${calc.activo ? enabled : disabled}`}
+                      title={calc.activo ? 'Disponible' : 'Próximamente'}
+                    >
+                      <span>{calc.icono}</span>
+                      <span className="hidden sm:inline">{calc.nombre}</span>
+                      {!calc.activo && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-500">
+                          Próximamente
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
