@@ -1,4 +1,3 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
 
@@ -12,7 +11,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState('user'); // 'admin' | 'user'
+  const [role, setRole] = useState('user'); // admin | user
   const [loading, setLoading] = useState(true);
 
   const isAdmin = role === 'admin';
@@ -24,7 +23,7 @@ export function AuthProvider({ children }) {
       id: user.id,
       email,
       nombre: email ? email.split('@')[0] : 'Usuario',
-      role,       // <-- rol REAL: 'admin' o 'user'
+      role,
       isAdmin,
     };
   }, [user, role, isAdmin]);
@@ -43,48 +42,66 @@ export function AuthProvider({ children }) {
         .maybeSingle();
 
       if (error) {
-        console.error('[user_roles] error:', error);
+        console.error('[Auth] user_roles error:', error);
         setRole('user');
         return;
       }
 
       setRole(data?.role === 'admin' ? 'admin' : 'user');
     } catch (e) {
-      console.error('Error inesperado leyendo rol:', e);
+      console.error('[Auth] fetchRole exception:', e);
       setRole('user');
     }
   };
 
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) console.error('[getSession] error:', error);
+    let alive = true;
 
-        const u = session?.user || null;
+    // 🔒 Failsafe: si en 3s no hemos terminado, salimos del "Cargando"
+    const t = setTimeout(() => {
+      if (!alive) return;
+      console.warn('[Auth] Timeout desbloqueando loading=true');
+      setLoading(false);
+    }, 3000);
+
+    const init = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) console.error('[Auth] getSession error:', error);
+
+        const u = data?.session?.user || null;
+        if (!alive) return;
+
         setUser(u);
         await fetchRole(u);
       } catch (e) {
-        console.error('Error init auth:', e);
+        console.error('[Auth] init exception:', e);
+        if (!alive) return;
         setUser(null);
         setRole('user');
       } finally {
+        if (!alive) return;
         setLoading(false);
+        clearTimeout(t);
       }
     };
 
     init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setLoading(true);
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const u = session?.user || null;
+      if (!alive) return;
       setUser(u);
       await fetchRole(u);
+      // NO ponemos loading=true aquí para evitar quedarnos bloqueados en eventos dobles (StrictMode)
       setLoading(false);
     });
 
-    return () => subscription?.unsubscribe();
+    return () => {
+      alive = false;
+      clearTimeout(t);
+      sub?.subscription?.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email, password) => {
