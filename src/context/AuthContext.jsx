@@ -1,106 +1,122 @@
-// AuthContext.jsx - Version simplificada y robusta
-import React, { createContext, useContext, useState, useEffect } from 'react';
+// AuthContext.jsx - Roles desde Supabase (user_roles)
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
 
-// Crear contexto
 const AuthContext = createContext(null);
 
-// EMAILS CON ROL ADMINISTRADOR
-const ADMIN_EMAILS = [
-  'david@rfserveis.com',
-  'rafael@rfserveis.com'
-];
-
-// Hook para usar el contexto
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth debe usarse dentro de AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 }
 
-// Provider
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [role, setRole] = useState('user'); // 'admin' | 'user'
   const [loading, setLoading] = useState(true);
 
-  // Verificar si es admin
-  const isAdmin = user ? ADMIN_EMAILS.includes(user.email?.toLowerCase()) : false;
+  const isAdmin = role === 'admin';
 
-  // Obtener perfil del usuario
-  const getProfile = () => {
+  // Perfil simple que usa la app (nombre/rol)
+  const profile = useMemo(() => {
     if (!user) return null;
+    const email = user.email || '';
+    const nombre = email ? email.split('@')[0] : 'Usuario';
     return {
       id: user.id,
-      email: user.email,
-      nombre: user.email?.split('@')[0] || 'Usuario',
+      email,
+      nombre,
       role: isAdmin ? 'admin' : 'usuario',
-      isAdmin: isAdmin
+      isAdmin
     };
+  }, [user, isAdmin]);
+
+  const fetchRole = async (u) => {
+    if (!u?.id) {
+      setRole('user');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', u.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error leyendo user_roles:', error);
+        setRole('user');
+        return;
+      }
+
+      if (!data?.role) {
+        // Si no hay rol guardado, por defecto es user
+        setRole('user');
+        return;
+      }
+
+      setRole(data.role);
+    } catch (e) {
+      console.error('Error inesperado leyendo rol:', e);
+      setRole('user');
+    }
+  };
+
+  const refreshSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const u = session?.user || null;
+      setUser(u);
+      await fetchRole(u);
+    } catch (e) {
+      console.error('Error obteniendo sesión:', e);
+      setUser(null);
+      setRole('user');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    // Obtener sesion inicial
-    const getInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user || null);
-      } catch (error) {
-        console.error('Error obteniendo sesion:', error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    refreshSession();
 
-    getInitialSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const u = session?.user || null;
+      setUser(u);
+      await fetchRole(u);
+      setLoading(false);
+    });
 
-    // Escuchar cambios de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('Auth event:', event);
-        setUser(session?.user || null);
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription?.unsubscribe();
-    };
+    return () => subscription?.unsubscribe();
   }, []);
 
-  // Funcion de login
   const signIn = async (email, password) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      return { data: null, error };
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setLoading(false);
+      return { error };
     }
+    const u = data?.user || data?.session?.user || null;
+    setUser(u);
+    await fetchRole(u);
+    setLoading(false);
+    return { data };
   };
 
-  // Funcion de logout
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-    } catch (error) {
-      console.error('Error en logout:', error);
-    }
+    setLoading(true);
+    await supabase.auth.signOut();
+    setUser(null);
+    setRole('user');
+    setLoading(false);
   };
 
-  // Valor del contexto
   const value = {
     user,
-    loading,
+    profile,
     isAdmin,
+    loading,
     isAuthenticated: !!user,
-    profile: getProfile(),
     signIn,
     signOut
   };
