@@ -9,24 +9,31 @@ export function useAuth() {
   return ctx;
 }
 
+// Admins fijos por email (fallback robusto)
+const ADMIN_EMAILS = new Set([
+  'david@rfserveis.com',
+  'rafael@rfserveis.com'
+]);
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [role, setRole] = useState('user'); // admin | user
+  const [role, setRole] = useState('user'); // 'admin' | 'user'
   const [loading, setLoading] = useState(true);
 
-  const isAdmin = role === 'admin';
+  const email = (user?.email || '').toLowerCase().trim();
+  const isAdmin = role === 'admin' || ADMIN_EMAILS.has(email);
 
   const profile = useMemo(() => {
     if (!user) return null;
-    const email = user.email || '';
+    const e = (user.email || '').trim();
     return {
       id: user.id,
-      email,
-      nombre: email ? email.split('@')[0] : 'Usuario',
-      role,
-      isAdmin,
+      email: e,
+      nombre: e ? e.split('@')[0] : 'Usuario',
+      role: isAdmin ? 'admin' : 'user',
+      isAdmin
     };
-  }, [user, role, isAdmin]);
+  }, [user, isAdmin]);
 
   const fetchRole = async (u) => {
     if (!u?.id) {
@@ -34,6 +41,14 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    // 1) Fallback inmediato por email (evita quedarte sin admin nunca)
+    const e = (u.email || '').toLowerCase().trim();
+    if (ADMIN_EMAILS.has(e)) {
+      setRole('admin');
+      return;
+    }
+
+    // 2) Intentar leer role desde user_roles
     try {
       const { data, error } = await supabase
         .from('user_roles')
@@ -48,8 +63,8 @@ export function AuthProvider({ children }) {
       }
 
       setRole(data?.role === 'admin' ? 'admin' : 'user');
-    } catch (e) {
-      console.error('[Auth] fetchRole exception:', e);
+    } catch (e2) {
+      console.error('[Auth] fetchRole exception:', e2);
       setRole('user');
     }
   };
@@ -57,14 +72,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let alive = true;
 
-    // 🔒 Failsafe: si en 3s no hemos terminado, salimos del "Cargando"
-    const t = setTimeout(() => {
-      if (!alive) return;
-      console.warn('[Auth] Timeout desbloqueando loading=true');
-      setLoading(false);
-    }, 3000);
-
     const init = async () => {
+      setLoading(true);
       try {
         const { data, error } = await supabase.auth.getSession();
         if (error) console.error('[Auth] getSession error:', error);
@@ -82,7 +91,6 @@ export function AuthProvider({ children }) {
       } finally {
         if (!alive) return;
         setLoading(false);
-        clearTimeout(t);
       }
     };
 
@@ -93,13 +101,11 @@ export function AuthProvider({ children }) {
       if (!alive) return;
       setUser(u);
       await fetchRole(u);
-      // NO ponemos loading=true aquí para evitar quedarnos bloqueados en eventos dobles (StrictMode)
       setLoading(false);
     });
 
     return () => {
       alive = false;
-      clearTimeout(t);
       sub?.subscription?.unsubscribe();
     };
   }, []);
@@ -131,6 +137,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         profile,
+        role,
         isAdmin,
         loading,
         isAuthenticated: !!user,
