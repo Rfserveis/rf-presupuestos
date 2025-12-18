@@ -9,7 +9,7 @@ export function useAuth() {
   return ctx;
 }
 
-// Admins fijos por email (fallback robusto)
+// Fallback robusto: estos emails son admin SIEMPRE
 const ADMIN_EMAILS = new Set([
   'david@rfserveis.com',
   'rafael@rfserveis.com'
@@ -21,6 +21,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const email = (user?.email || '').toLowerCase().trim();
+
+  // isAdmin por tabla o por email (fallback)
   const isAdmin = role === 'admin' || ADMIN_EMAILS.has(email);
 
   const profile = useMemo(() => {
@@ -41,14 +43,14 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // 1) Fallback inmediato por email (evita quedarte sin admin nunca)
+    // 1) Fallback inmediato por email
     const e = (u.email || '').toLowerCase().trim();
     if (ADMIN_EMAILS.has(e)) {
       setRole('admin');
       return;
     }
 
-    // 2) Intentar leer role desde user_roles
+    // 2) Si no está en fallback, intentamos leer user_roles
     try {
       const { data, error } = await supabase
         .from('user_roles')
@@ -63,8 +65,8 @@ export function AuthProvider({ children }) {
       }
 
       setRole(data?.role === 'admin' ? 'admin' : 'user');
-    } catch (e2) {
-      console.error('[Auth] fetchRole exception:', e2);
+    } catch (err) {
+      console.error('[Auth] fetchRole exception:', err);
       setRole('user');
     }
   };
@@ -83,8 +85,8 @@ export function AuthProvider({ children }) {
 
         setUser(u);
         await fetchRole(u);
-      } catch (e) {
-        console.error('[Auth] init exception:', e);
+      } catch (err) {
+        console.error('[Auth] init exception:', err);
         if (!alive) return;
         setUser(null);
         setRole('user');
@@ -110,20 +112,6 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const signIn = async (email, password) => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setLoading(false);
-      return { error };
-    }
-    const u = data?.user || data?.session?.user || null;
-    setUser(u);
-    await fetchRole(u);
-    setLoading(false);
-    return { data };
-  };
-
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
@@ -141,8 +129,7 @@ export function AuthProvider({ children }) {
         isAdmin,
         loading,
         isAuthenticated: !!user,
-        signIn,
-        signOut,
+        signOut
       }}
     >
       {children}
