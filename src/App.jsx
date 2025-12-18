@@ -9,79 +9,69 @@ import CalculadorBarandillasTopGlass from './components/CalculadorBarandillasTop
 import CalculadorEscalerasRetractiles from './components/CalculadorEscalerasRetractiles';
 import AdminPanel from './components/AdminPanel';
 
+// Admins fijos por email (fallback robusto)
+const ADMIN_EMAILS = ['david@rfserveis.com', 'rafael@rfserveis.com'];
+
 // ============================================
 // LOGIN
 // ============================================
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState('');
 
-  const handleSubmit = async (e) => {
+  const signIn = async (e) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
+    setStatus('Entrando...');
 
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    } catch (err) {
-      setError(err.message || 'Error al iniciar sesión');
-    } finally {
-      setLoading(false);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      setStatus(`Error: ${error.message}`);
+      return;
     }
+
+    setStatus('OK');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="bg-blue-600 text-white font-bold text-3xl px-6 py-3 rounded-xl inline-block mb-4">
-            RF
-          </div>
-          <h1 className="text-2xl font-bold text-gray-800">RF Presupuestos</h1>
-          <p className="text-gray-500">Sistema de presupuestos</p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="w-full max-w-md bg-white border rounded-2xl shadow-sm p-6">
+        <h1 className="text-2xl font-bold text-slate-800">RF Presupuestos</h1>
+        <p className="text-sm text-gray-500 mt-1">Accede con tu usuario</p>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={signIn} className="mt-6 space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <label className="text-xs text-gray-500">Email</label>
             <input
-              type="email"
+              className="w-full mt-1 border rounded-xl px-3 py-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
-              placeholder="tu@email.com"
-              required
+              placeholder="email@rfserveis.com"
+              autoComplete="email"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Contraseña</label>
+            <label className="text-xs text-gray-500">Password</label>
             <input
+              className="w-full mt-1 border rounded-xl px-3 py-2"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               placeholder="••••••••"
-              required
+              autoComplete="current-password"
             />
           </div>
 
-          {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm">
-              {error}
-            </div>
-          )}
-
           <button
+            className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2 font-medium"
             type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl disabled:opacity-50 transition-all"
           >
-            {loading ? 'Entrando...' : 'Iniciar sesión'}
+            Entrar
           </button>
+
+          {status && <div className="text-xs text-gray-600 mt-2">{status}</div>}
         </form>
       </div>
     </div>
@@ -89,10 +79,12 @@ function Login() {
 }
 
 // ============================================
-// VISTA ACCESO (para admin y user)
+// ACCESO
 // ============================================
 function Acceso() {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin: isAdminCtx } = useAuth();
+  const email = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isAdmin = !!isAdminCtx || ADMIN_EMAILS.includes(email);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -115,7 +107,11 @@ function Acceso() {
 // DASHBOARD
 // ============================================
 function Dashboard() {
-  const { profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin: isAdminCtx, signOut } = useAuth();
+
+  // ✅ Fallback admin por email (esto es lo que arregla tu botón)
+  const email = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isAdmin = !!isAdminCtx || ADMIN_EMAILS.includes(email);
 
   const [currentView, setCurrentView] = useState('calculadores'); // calculadores | acceso | admin
   const [calculadorActivo, setCalculadorActivo] = useState('vidrios');
@@ -161,9 +157,9 @@ function Dashboard() {
       {/* BARRA SUPERIOR */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-slate-800">RF Presupuestos</span>
-            <span className="text-sm text-gray-500 hidden sm:block">Sistema de presupuestos</span>
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">RF Presupuestos</h1>
+            <p className="text-xs text-gray-500">Sistema de presupuestos</p>
           </div>
 
           <nav className="flex items-center gap-2">
@@ -191,7 +187,7 @@ function Dashboard() {
               Acceso
             </button>
 
-            {/* Panel Admin (solo admin) */}
+            {/* ✅ Panel Admin (solo admin) */}
             {isAdmin && (
               <button
                 onClick={() => setCurrentView('admin')}
@@ -205,14 +201,18 @@ function Dashboard() {
               </button>
             )}
 
-            <div className="ml-2 text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-800">{profile?.nombre || 'Usuario'}</p>
-              <p className="text-xs text-gray-500">{isAdmin ? 'Administrador' : 'Usuario'}</p>
+            <div className="text-right ml-3">
+              <div className="text-sm font-semibold text-slate-800">
+                {profile?.nombre || 'Usuario'}
+              </div>
+              <div className="text-xs text-gray-500">
+                {isAdmin ? 'Administrador' : 'Usuario'}
+              </div>
             </div>
 
             <button
               onClick={signOut}
-              className="px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200"
+              className="ml-2 px-3 py-1.5 text-sm rounded bg-gray-100 hover:bg-gray-200"
             >
               Salir
             </button>
@@ -234,8 +234,11 @@ function Dashboard() {
               </div>
             )}
 
-            {/* Selector de calculadores */}
-            <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="bg-white rounded-xl shadow-sm border p-4">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">
+                Selecciona una categoría
+              </h2>
+
               <div className="flex flex-wrap gap-2">
                 {calculadores.map((calc) => {
                   const isSelected = calculadorActivo === calc.id;
@@ -253,12 +256,12 @@ function Dashboard() {
                       key={calc.id}
                       onClick={() => selectCalculador(calc)}
                       className={`${base} ${calc.activo ? enabled : disabled}`}
-                      title={calc.activo ? 'Disponible' : 'Próximamente'}
+                      title={calc.activo ? '' : 'Próximamente'}
                     >
                       <span>{calc.icono}</span>
-                      <span className="hidden sm:inline">{calc.nombre}</span>
+                      <span>{calc.nombre}</span>
                       {!calc.activo && (
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-500">
+                        <span className="text-xs ml-2 px-2 py-0.5 rounded bg-white border">
                           Próximamente
                         </span>
                       )}
@@ -277,22 +280,11 @@ function Dashboard() {
 }
 
 // ============================================
-// APP CONTENT
+// APP CONTENT (decide Login o Dashboard)
 // ============================================
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Cargando...</p>
-        </div>
-      </div>
-    );
-  }
-
+  if (loading) return <div className="p-6 text-gray-600">Cargando...</div>;
   return isAuthenticated ? <Dashboard /> : <Login />;
 }
 
