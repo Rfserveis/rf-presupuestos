@@ -1,500 +1,339 @@
 // src/components/CalculadorVidrios.jsx
-// Layout OK + multi-vidrios + combos desde Supabase (VIDRIOS)
-// Proveedores: disponibles vs próximamente (sin inventar precios)
+// Multi-vidrios + Guardado por componentes
+// IMPORTANTE: Combos + precio base salen SOLO de BD (public.tarifas_vidrios)
 
 import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../services/supabase';
 import GuardarPresupuestoModal from './GuardarPresupuestoModal';
 import { savePresupuestoConItems } from '../services/presupuestoStore';
+import {
+  getTiposVidrio,
+  getProveedoresVidrio,
+  getEspesoresVidrio,
+  getAcabadosVidrio,
+  getPrecioM2Vidrio
+} from '../services/tarifasVidrios';
 
-// ==============================
-// OPERACIONES (fallback)
-// ==============================
+// Operaciones (luego las conectamos a operaciones_vidrios; hoy NO tocamos eso)
 const OPERACIONES = {
-  cantos: {
-    Vallesglass: {
-      '5+5': { Transparente: 1.2, Mate: 1.2, Gris: 4.27 },
-      '6+6': { Transparente: 1.2, Mate: 1.2, Gris: 4.27 },
-      '8+8': { default: 2.0 },
-      '10+10': { default: 2.0 },
-      '12+12': { default: 2.0 },
-    },
-    'Baros Vision': { default: 0 },
-  },
-  puntas: {
-    Vallesglass: { Transparente: 2.0, Mate: 2.0, Gris: 2.4, templado: 2.4 },
-    'Baros Vision': { default: 2.8 },
-    'Control Glass': { default: 0 },
-  },
-  taladros: {
-    Vallesglass: { '<=50': 5.5, '>50': 8.0 },
-    'Baros Vision': { default: 2.22 },
-    'Control Glass': { default: 0 },
-  },
   recargos_forma: {
     Laminado: { pequeno: 16, grande: 32 },
     'Laminado Templado': { pequeno: 20, grande: 40 },
-    Templado: { pequeno: 20, grande: 40 },
-  },
+    Templado: { pequeno: 20, grande: 40 }
+  }
 };
 
 const defaultForm = {
   ancho: '',
   alto: '',
   cantidad: 1,
-  tipo: 'Laminado',
+  tipoVidrio: '',
   proveedor: '',
-  espesor_mm: '',
+  espesor: '',
   acabado: '',
   forma: 'rectangular',
   cantos: false,
   puntas: false,
   taladros: 0,
-  diametroTaladro: 40,
+  diametroTaladro: 50
 };
 
-const norm = (v) => String(v ?? '').trim();
-
-function buildTitulo(form) {
+function formToTitulo(formData) {
+  const { ancho, alto, tipoVidrio, proveedor, espesor, acabado, forma, cantos, puntas, taladros } = formData;
   const extras = [
-    form.forma !== 'rectangular' ? 'inclinado' : null,
-    form.cantos ? 'cantos' : null,
-    form.puntas ? 'puntas' : null,
-    Number(form.taladros) > 0 ? `taladros:${form.taladros}` : null,
-  ]
-    .filter(Boolean)
-    .join(', ');
+    forma !== 'rectangular' ? 'inclinado' : null,
+    cantos ? 'cantos' : null,
+    puntas ? 'puntas' : null,
+    Number(taladros) > 0 ? `taladros:${taladros}` : null
+  ].filter(Boolean).join(', ');
 
-  return `Vidrio ${form.ancho}x${form.alto} · ${form.tipo} · ${form.proveedor} · ${form.espesor_mm} · ${form.acabado}${
-    extras ? ` · ${extras}` : ''
-  }`;
+  return `Vidrio ${ancho}x${alto} · ${tipoVidrio} · ${proveedor} · ${espesor} · ${acabado}${extras ? ` · ${extras}` : ''}`;
 }
 
-export default function CalculadorVidrios() {
-  const [formData, setFormData] = useState({ ...defaultForm });
+async function calcularVidrioDB(formData) {
+  const {
+    ancho, alto, cantidad, tipoVidrio, proveedor,
+    espesor, acabado, forma,
+    cantos, puntas, taladros
+  } = formData;
 
-  // proveedores disponibles / próximamente
-  const [proveedoresDisponibles, setProveedoresDisponibles] = useState([]);
-  const [proveedoresProx, setProveedoresProx] = useState([]);
+  if (!ancho || !alto || Number(ancho) <= 0 || Number(alto) <= 0) {
+    return { resultado: null, mensaje: { tipo: 'error', texto: 'Introduce las medidas del vidrio' } };
+  }
+  if (!tipoVidrio || !proveedor || !espesor || !acabado) {
+    return { resultado: null, mensaje: { tipo: 'error', texto: 'Selecciona tipo, proveedor, espesor y acabado' } };
+  }
 
-  const [espesores, setEspesores] = useState([]);
-  const [acabados, setAcabados] = useState([]);
+  const qty = Math.max(1, parseInt(cantidad || 1, 10));
+  const anchoM = Number(ancho) / 1000;
+  const altoM = Number(alto) / 1000;
+  const m2Unidad = anchoM * altoM;
+  const m2Total = m2Unidad * qty;
 
-  const [precioM2, setPrecioM2] = useState(null);
-  const [resultado, setResultado] = useState(null);
-  const [mensaje, setMensaje] = useState(null);
+  // Precio base desde BD
+  const precioM2 = await getPrecioM2Vidrio({
+    categoria: 'VIDRIOS',
+    tipo: tipoVidrio,
+    proveedor,
+    espesor_mm: espesor,
+    acabado
+  });
 
-  const [items, setItems] = useState([]);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
+  if (!precioM2 || precioM2 <= 0) {
+    return { resultado: null, mensaje: { tipo: 'error', texto: 'Combinación sin precio en BD (o no activa)' } };
+  }
 
-  const [openSave, setOpenSave] = useState(false);
+  let precioBase = precioM2 * m2Total;
 
-  const templadoProximamente = useMemo(() => norm(formData.tipo).toLowerCase() === 'templado', [formData.tipo]);
+  // Recargo forma
+  if (forma !== 'rectangular') {
+    const recargos = OPERACIONES.recargos_forma[tipoVidrio] || OPERACIONES.recargos_forma['Laminado'];
+    const recargo = forma === 'inclinado_pequeno' ? recargos.pequeno : recargos.grande;
+    precioBase *= (1 + recargo / 100);
+  }
 
-  // ==============================
-  // CARGA INICIAL: proveedores disponibles vs proximamente
-  // ==============================
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [{ data: disp }, { data: prox }] = await Promise.all([
-          supabase.from('vw_vidrios_proveedores_disponibles').select('*'),
-          supabase.from('vw_vidrios_proveedores_proximamente').select('*'),
-        ]);
+  // Extras (de momento solo placeholders visuales; mañana conectamos operaciones_vidrios)
+  const extras = [];
+  let totalExtras = 0;
 
-        const dispList = (disp || []).map((r) => r.proveedor).filter(Boolean);
-        const proxList = (prox || []).map((r) => r.proveedor).filter(Boolean);
+  // Reglas base (por ahora mensajes)
+  let mensaje = null;
+  if (Number(taladros) > 0 && !(tipoVidrio === 'Templado' || tipoVidrio === 'Laminado Templado')) {
+    mensaje = { tipo: 'warning', texto: 'Los taladros solo aplican a Templado o Laminado Templado' };
+  }
 
-        setProveedoresDisponibles(dispList);
-        setProveedoresProx(proxList);
+  const subtotal = precioBase + totalExtras;
+  const iva = subtotal * 0.21;
+  const total = subtotal + iva;
 
-        setFormData((prev) => ({
-          ...prev,
-          proveedor: prev.proveedor || dispList[0] || '',
-        }));
-      } catch (e) {
-        console.error(e);
-        setMensaje({ tipo: 'error', texto: 'No se han podido cargar proveedores desde Supabase.' });
-      }
-    };
-
-    load();
-  }, []);
-
-  // ==============================
-  // Cargar espesores por (proveedor, tipo) SOLO con precio > 0
-  // ==============================
-  useEffect(() => {
-    const loadEspesores = async () => {
-      const proveedor = norm(formData.proveedor);
-      const tipo = norm(formData.tipo);
-
-      if (!proveedor || !tipo) return;
-
-      // si intentan usar proveedor "proximamente", bloqueamos
-      if (proveedoresProx.includes(proveedor)) {
-        setEspesores([]);
-        setFormData((prev) => ({ ...prev, espesor_mm: '', acabado: '' }));
-        setPrecioM2(null);
-        setResultado(null);
-        setMensaje({ tipo: 'warning', texto: `Proveedor "${proveedor}" está Próximamente (sin precios en VIDRIOS).` });
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('tarifas_vidrios')
-          .select('espesor_mm')
-          .eq('categoria', 'VIDRIOS')
-          .eq('activo', true)
-          .gt('precio_m2', 0)
-          .eq('proveedor', proveedor)
-          .eq('tipo', tipo);
-
-        if (error) throw error;
-
-        const uniq = Array.from(new Set((data || []).map((r) => r.espesor_mm).filter(Boolean))).sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true })
-        );
-
-        setEspesores(uniq);
-
-        setFormData((prev) => ({
-          ...prev,
-          espesor_mm: uniq.includes(prev.espesor_mm) ? prev.espesor_mm : uniq[0] || '',
-        }));
-      } catch (e) {
-        console.error(e);
-        setEspesores([]);
-        setFormData((prev) => ({ ...prev, espesor_mm: '' }));
-      }
-    };
-
-    loadEspesores();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.proveedor, formData.tipo, proveedoresProx.join('|')]);
-
-  // ==============================
-  // Cargar acabados por (proveedor, tipo, espesor) SOLO con precio > 0
-  // ==============================
-  useEffect(() => {
-    const loadAcabados = async () => {
-      const proveedor = norm(formData.proveedor);
-      const tipo = norm(formData.tipo);
-      const espesor_mm = norm(formData.espesor_mm);
-
-      if (!proveedor || !tipo || !espesor_mm) return;
-
-      if (proveedoresProx.includes(proveedor)) {
-        setAcabados([]);
-        setFormData((prev) => ({ ...prev, acabado: '' }));
-        setPrecioM2(null);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('tarifas_vidrios')
-          .select('acabado')
-          .eq('categoria', 'VIDRIOS')
-          .eq('activo', true)
-          .gt('precio_m2', 0)
-          .eq('proveedor', proveedor)
-          .eq('tipo', tipo)
-          .eq('espesor_mm', espesor_mm);
-
-        if (error) throw error;
-
-        const uniq = Array.from(new Set((data || []).map((r) => r.acabado).filter(Boolean))).sort((a, b) =>
-          a.localeCompare(b, undefined, { numeric: true })
-        );
-
-        setAcabados(uniq);
-
-        setFormData((prev) => ({
-          ...prev,
-          acabado: uniq.includes(prev.acabado) ? prev.acabado : uniq[0] || '',
-        }));
-      } catch (e) {
-        console.error(e);
-        setAcabados([]);
-        setFormData((prev) => ({ ...prev, acabado: '' }));
-      }
-    };
-
-    loadAcabados();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.proveedor, formData.tipo, formData.espesor_mm, proveedoresProx.join('|')]);
-
-  // ==============================
-  // Cargar precio m2
-  // ==============================
-  useEffect(() => {
-    const loadPrecio = async () => {
-      const proveedor = norm(formData.proveedor);
-      const tipo = norm(formData.tipo);
-      const espesor_mm = norm(formData.espesor_mm);
-      const acabado = norm(formData.acabado);
-
-      if (!proveedor || !tipo || !espesor_mm || !acabado) {
-        setPrecioM2(null);
-        return;
-      }
-
-      if (proveedoresProx.includes(proveedor)) {
-        setPrecioM2(null);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase
-          .from('tarifas_vidrios')
-          .select('precio_m2')
-          .eq('categoria', 'VIDRIOS')
-          .eq('activo', true)
-          .gt('precio_m2', 0)
-          .eq('proveedor', proveedor)
-          .eq('tipo', tipo)
-          .eq('espesor_mm', espesor_mm)
-          .eq('acabado', acabado)
-          .limit(1)
-          .maybeSingle();
-
-        if (error) throw error;
-        setPrecioM2(data?.precio_m2 ?? null);
-      } catch (e) {
-        console.error(e);
-        setPrecioM2(null);
-      }
-    };
-
-    loadPrecio();
-  }, [formData.proveedor, formData.tipo, formData.espesor_mm, formData.acabado, proveedoresProx.join('|')]);
-
-  // ==============================
-  // CÁLCULO
-  // ==============================
-  const calcular = () => {
-    setMensaje(null);
-
-    if (templadoProximamente) {
-      setResultado(null);
-      setMensaje({ tipo: 'warning', texto: 'Templado está “Próximamente” (sin precios activos).' });
-      return;
-    }
-
-    if (proveedoresProx.includes(norm(formData.proveedor))) {
-      setResultado(null);
-      setMensaje({ tipo: 'warning', texto: `Proveedor "${formData.proveedor}" está Próximamente.` });
-      return;
-    }
-
-    const ancho = Number(formData.ancho);
-    const alto = Number(formData.alto);
-    const cantidad = Number(formData.cantidad || 1);
-
-    if (!ancho || !alto || ancho <= 0 || alto <= 0) {
-      setResultado(null);
-      setMensaje({ tipo: 'error', texto: 'Introduce ancho y alto (mm).' });
-      return;
-    }
-
-    if (!formData.proveedor || !formData.tipo || !formData.espesor_mm || !formData.acabado) {
-      setResultado(null);
-      setMensaje({ tipo: 'error', texto: 'Completa proveedor, tipo, espesor y acabado.' });
-      return;
-    }
-
-    if (precioM2 === null) {
-      setResultado(null);
-      setMensaje({ tipo: 'error', texto: 'No hay precio para esta combinación.' });
-      return;
-    }
-
-    const anchoM = ancho / 1000;
-    const altoM = alto / 1000;
-    const m2Unidad = anchoM * altoM;
-    const m2Total = m2Unidad * cantidad;
-    const perimetroTotal = 2 * (anchoM + altoM) * cantidad;
-
-    let precioBase = Number(precioM2) * m2Total;
-
-    if (formData.forma !== 'rectangular') {
-      const rec = OPERACIONES.recargos_forma[formData.tipo] || OPERACIONES.recargos_forma.Laminado;
-      const recargo = formData.forma === 'inclinado_pequeno' ? rec.pequeno : rec.grande;
-      precioBase *= 1 + recargo / 100;
-    }
-
-    const extras = [];
-    let totalExtras = 0;
-
-    if (formData.cantos) {
-      const prov = formData.proveedor;
-      const esp = formData.espesor_mm;
-      const acb = formData.acabado;
-
-      if (prov === 'Baros Vision') {
-        extras.push({ nombre: 'Cantos pulidos', detalle: 'Incluido', precio: 0 });
-      } else {
-        const mapProv = OPERACIONES.cantos[prov] || OPERACIONES.cantos.Vallesglass;
-        const mapEsp = mapProv?.[esp] || mapProv?.default || {};
-        const precioCanto = mapEsp?.[acb] ?? mapEsp?.default ?? 2.0;
-        const coste = perimetroTotal * precioCanto;
-        extras.push({
-          nombre: 'Cantos pulidos',
-          detalle: `${perimetroTotal.toFixed(2)} ml x ${precioCanto.toFixed(2)} €/ml`,
-          precio: coste,
-        });
-        totalExtras += coste;
-      }
-    }
-
-    if (formData.puntas) {
-      const prov = formData.proveedor;
-      const numPuntas = 4 * cantidad;
-
-      let precioPunta = 2.0;
-      if (prov === 'Baros Vision') precioPunta = 2.8;
-      else if (norm(formData.acabado).toLowerCase() === 'gris') precioPunta = 2.4;
-      else if (norm(formData.tipo).toLowerCase() !== 'laminado') precioPunta = 2.4;
-
-      const coste = numPuntas * precioPunta;
-      extras.push({ nombre: 'Puntas roma', detalle: `${numPuntas} ud x ${precioPunta.toFixed(2)} €/ud`, precio: coste });
-      totalExtras += coste;
-    }
-
-    let msg = null;
-    const taladros = Number(formData.taladros || 0);
-    if (taladros > 0) {
-      const tipoLower = norm(formData.tipo).toLowerCase();
-      const prov = formData.proveedor;
-
-      if (tipoLower === 'laminado') {
-        msg = { tipo: 'warning', texto: 'Los taladros solo se aplican en templado / laminado templado.' };
-      } else {
-        const numTaladros = taladros * cantidad;
-        if (prov === 'Baros Vision') {
-          const precioT = OPERACIONES.taladros['Baros Vision']?.default ?? 0;
-          const coste = numTaladros * precioT;
-          extras.push({
-            nombre: `Taladros Ø${formData.diametroTaladro}mm`,
-            detalle: `${numTaladros} ud x ${precioT.toFixed(2)} €/ud`,
-            precio: coste,
-          });
-          totalExtras += coste;
-        } else {
-          const precioT = Number(formData.diametroTaladro) <= 50 ? 5.5 : 8.0;
-          const coste = numTaladros * precioT;
-          extras.push({
-            nombre: `Taladros Ø${formData.diametroTaladro}mm`,
-            detalle: `${numTaladros} ud x ${precioT.toFixed(2)} €/ud`,
-            precio: coste,
-          });
-          totalExtras += coste;
-        }
-      }
-    }
-
-    const subtotal = precioBase + totalExtras;
-    const iva = subtotal * 0.21;
-    const total = subtotal + iva;
-
-    const res = {
+  return {
+    resultado: {
       medidas: `${ancho} x ${alto} mm`,
-      cantidad,
+      cantidad: qty,
       m2Unidad,
       m2Total,
-      tipo: formData.tipo,
-      proveedor: formData.proveedor,
-      espesor_mm: formData.espesor_mm,
-      acabado: formData.acabado,
-      precioM2: Number(precioM2),
+      tipoVidrio,
+      proveedor,
+      espesor,
+      acabado,
+      forma:
+        forma === 'rectangular'
+          ? 'Rectangular'
+          : forma === 'inclinado_pequeno'
+            ? 'Inclinado (+%)'
+            : 'Inclinado grande (+%)',
+      precioM2,
       precioBase,
       extras,
       totalExtras,
       subtotal,
       iva,
-      total,
-    };
+      total
+    },
+    mensaje
+  };
+}
 
+export default function CalculadorVidrios() {
+  const [formData, setFormData] = useState({ ...defaultForm });
+
+  const [tiposDisp, setTiposDisp] = useState([]);
+  const [proveedoresDisp, setProveedoresDisp] = useState([]);
+  const [espesoresDisp, setEspesoresDisp] = useState([]);
+  const [acabadosDisp, setAcabadosDisp] = useState([]);
+
+  const [resultado, setResultado] = useState(null);
+  const [mensaje, setMensaje] = useState(null);
+
+  const [items, setItems] = useState([]); // [{ formData, resultado, nombre }]
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+
+  const [openSave, setOpenSave] = useState(false);
+
+  // Cargar tipos iniciales
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const tipos = await getTiposVidrio({ categoria: 'VIDRIOS' });
+        if (!alive) return;
+        setTiposDisp(tipos);
+
+        // Default tipo
+        const nextTipo = tipos.includes(formData.tipoVidrio) ? formData.tipoVidrio : (tipos[0] || '');
+        setFormData((p) => ({ ...p, tipoVidrio: nextTipo }));
+      } catch (e) {
+        console.error(e);
+        if (alive) setMensaje({ tipo: 'error', texto: 'Error cargando tipos desde BD' });
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cuando cambia tipo -> proveedores
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const tipo = formData.tipoVidrio;
+        if (!tipo) return;
+
+        const proveedores = await getProveedoresVidrio({ categoria: 'VIDRIOS', tipo });
+        if (!alive) return;
+        setProveedoresDisp(proveedores);
+
+        const nextProv = proveedores.includes(formData.proveedor) ? formData.proveedor : (proveedores[0] || '');
+        setFormData((p) => ({ ...p, proveedor: nextProv }));
+      } catch (e) {
+        console.error(e);
+        if (alive) setMensaje({ tipo: 'error', texto: 'Error cargando proveedores desde BD' });
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.tipoVidrio]);
+
+  // Cuando cambia proveedor o tipo -> espesores
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { tipoVidrio, proveedor } = formData;
+        if (!tipoVidrio || !proveedor) return;
+
+        const espesores = await getEspesoresVidrio({ categoria: 'VIDRIOS', tipo: tipoVidrio, proveedor });
+        if (!alive) return;
+        setEspesoresDisp(espesores);
+
+        const nextEsp = espesores.includes(formData.espesor) ? formData.espesor : (espesores[0] || '');
+        setFormData((p) => ({ ...p, espesor: nextEsp }));
+      } catch (e) {
+        console.error(e);
+        if (alive) setMensaje({ tipo: 'error', texto: 'Error cargando espesores desde BD' });
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.tipoVidrio, formData.proveedor]);
+
+  // Cuando cambia espesor/proveedor/tipo -> acabados
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { tipoVidrio, proveedor, espesor } = formData;
+        if (!tipoVidrio || !proveedor || !espesor) return;
+
+        const acabados = await getAcabadosVidrio({
+          categoria: 'VIDRIOS',
+          tipo: tipoVidrio,
+          proveedor,
+          espesor_mm: espesor
+        });
+
+        if (!alive) return;
+        setAcabadosDisp(acabados);
+
+        const nextAc = acabados.includes(formData.acabado) ? formData.acabado : (acabados[0] || '');
+        setFormData((p) => ({ ...p, acabado: nextAc }));
+      } catch (e) {
+        console.error(e);
+        if (alive) setMensaje({ tipo: 'error', texto: 'Error cargando acabados desde BD' });
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.tipoVidrio, formData.proveedor, formData.espesor]);
+
+  const calcular = async () => {
+    const { resultado: res, mensaje: msg } = await calcularVidrioDB(formData);
     setResultado(res);
-    if (msg) setMensaje(msg);
+    setMensaje(msg);
   };
 
   const limpiar = () => {
-    setFormData((prev) => ({
+    setFormData((p) => ({
       ...defaultForm,
-      proveedor: proveedoresDisponibles[0] || prev.proveedor || '',
+      tipoVidrio: p.tipoVidrio || '',
+      proveedor: p.proveedor || '',
+      espesor: p.espesor || '',
+      acabado: p.acabado || ''
     }));
     setResultado(null);
     setMensaje(null);
     setSelectedIndex(-1);
   };
 
-  const canAdd = useMemo(() => {
-    if (templadoProximamente) return false;
-    if (proveedoresProx.includes(norm(formData.proveedor))) return false;
-    if (!formData.ancho || !formData.alto) return false;
-    if (!formData.proveedor || !formData.tipo || !formData.espesor_mm || !formData.acabado) return false;
-    if (precioM2 === null) return false;
-    return true;
-  }, [templadoProximamente, formData, precioM2, proveedoresProx]);
-
-  const addToList = () => {
-    setMensaje(null);
-    if (!canAdd) {
-      setMensaje({ tipo: 'warning', texto: 'Completa todos los campos y asegúrate de que hay precio antes de añadir.' });
+  const addToList = async () => {
+    const { resultado: res, mensaje: msg } = await calcularVidrioDB(formData);
+    if (!res) {
+      setResultado(null);
+      setMensaje(msg);
       return;
     }
-    calcular();
-    const nombre = buildTitulo(formData);
-    setItems((prev) => [...prev, { formData: { ...formData }, nombre, resultado: resultado ? { ...resultado } : null }]);
-    setMensaje({ tipo: 'success', texto: 'Vidrio añadido a la lista.' });
-    setResultado(null);
-    setFormData((prev) => ({ ...defaultForm, proveedor: prev.proveedor, tipo: prev.tipo }));
-    setSelectedIndex(-1);
+    const nombre = formToTitulo(formData);
+    setItems((prev) => [...prev, { formData: { ...formData }, resultado: res, nombre }]);
+    setMensaje({ tipo: 'success', texto: 'Vidrio añadido a la lista' });
+    limpiar();
+  };
+
+  const updateSelected = async () => {
+    if (selectedIndex < 0) {
+      setMensaje({ tipo: 'warning', texto: 'Selecciona un vidrio de la lista para actualizar' });
+      return;
+    }
+    const { resultado: res, mensaje: msg } = await calcularVidrioDB(formData);
+    if (!res) {
+      setResultado(null);
+      setMensaje(msg);
+      return;
+    }
+    const nombre = formToTitulo(formData);
+    setItems((prev) => prev.map((it, idx) => (idx === selectedIndex ? { formData: { ...formData }, resultado: res, nombre } : it)));
+    setResultado(res);
+    setMensaje(msg || { tipo: 'success', texto: 'Vidrio actualizado' });
   };
 
   const selectItem = (idx) => {
     const it = items[idx];
     setSelectedIndex(idx);
     setFormData({ ...it.formData });
-    setResultado(it.resultado || null);
+    setResultado(it.resultado);
     setMensaje(null);
   };
 
   const removeItem = (idx) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
     if (selectedIndex === idx) limpiar();
-    else if (selectedIndex > idx) setSelectedIndex((s) => s - 1);
+    else if (selectedIndex > idx) setSelectedIndex((p) => p - 1);
   };
 
   const totalLista = useMemo(() => items.reduce((sum, it) => sum + (it.resultado?.total || 0), 0), [items]);
 
   const guardarPresupuesto = async ({ cliente_id, proyecto_id, impuestos }) => {
     if (items.length === 0) {
-      setMensaje({ tipo: 'error', texto: 'Añade al menos un vidrio a la lista antes de guardar.' });
+      setMensaje({ tipo: 'error', texto: 'Añade al menos un vidrio a la lista antes de guardar' });
       return;
     }
 
+    const year = new Date().getFullYear();
+    const numero = `VID-${year}-${String(Date.now()).slice(-6)}`;
+
+    const itemsDB = items.map((it, idx) => {
+      const qty = it.formData?.cantidad ? parseInt(it.formData.cantidad, 10) : 1;
+      const subtotal = it.resultado?.subtotal ?? 0;
+      const precio_unitario = qty > 0 ? subtotal / qty : subtotal;
+
+      return {
+        nombre: it.nombre || `Vidrio ${idx + 1}`,
+        cantidad: qty,
+        precio_unitario: Number(precio_unitario.toFixed(2)),
+        posicion: idx,
+        datos: { form: it.formData, desglose: it.resultado }
+      };
+    });
+
     try {
-      const year = new Date().getFullYear();
-      const numero = `VID-${year}-${String(Date.now()).slice(-6)}`;
-
-      const itemsDB = items.map((it, idx) => {
-        const qty = Number(it.formData?.cantidad || 1);
-        const subtotal = it.resultado?.subtotal ?? 0;
-        const precio_unitario = qty > 0 ? subtotal / qty : subtotal;
-
-        return {
-          nombre: it.nombre || `Vidrio ${idx + 1}`,
-          cantidad: qty,
-          precio_unitario: Number(precio_unitario.toFixed(2)),
-          posicion: idx,
-          datos: { form: it.formData, desglose: it.resultado },
-        };
-      });
-
       await savePresupuestoConItems({
         numero,
         cliente_id,
@@ -502,33 +341,22 @@ export default function CalculadorVidrios() {
         impuestos,
         componente_tipo: 'vidrios',
         componente_titulo: 'Vidrios',
-        items: itemsDB,
+        items: itemsDB
       });
 
-      setMensaje({ tipo: 'success', texto: 'Presupuesto guardado correctamente.' });
+      setMensaje({ tipo: 'success', texto: 'Presupuesto guardado correctamente' });
       setItems([]);
       limpiar();
     } catch (e) {
-      console.error(e);
-      setMensaje({ tipo: 'error', texto: e.message || 'Error guardando en Supabase.' });
+      setMensaje({ tipo: 'error', texto: e.message || 'Error guardando en Supabase' });
     }
   };
 
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">🪟 Calculador de Vidrios</h2>
-            <p className="text-blue-100 text-sm">Layout clásico + lista lateral + proveedores disponibles/próximamente</p>
-          </div>
-
-          {templadoProximamente && (
-            <span className="text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1 rounded-full">
-              Templado: Próximamente
-            </span>
-          )}
-        </div>
+        <h2 className="text-xl font-bold text-white flex items-center gap-2">🪟 Calculador de Vidrios</h2>
+        <p className="text-blue-100 text-sm">Combos y precios desde BD (tarifas_vidrios)</p>
       </div>
 
       <div className="p-6">
@@ -538,8 +366,8 @@ export default function CalculadorVidrios() {
               mensaje.tipo === 'error'
                 ? 'bg-red-50 text-red-700 border border-red-200'
                 : mensaje.tipo === 'warning'
-                ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                : 'bg-green-50 text-green-800 border border-green-200'
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-green-50 text-green-800 border border-green-200'
             }`}
           >
             {mensaje.texto}
@@ -548,6 +376,7 @@ export default function CalculadorVidrios() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
+            {/* Medidas */}
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-semibold text-gray-800 mb-3">📐 Medidas</h3>
               <div className="grid grid-cols-3 gap-3">
@@ -584,39 +413,30 @@ export default function CalculadorVidrios() {
               </div>
             </div>
 
+            {/* Tipo */}
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-semibold text-gray-800 mb-3">🔍 Tipo de Vidrio</h3>
-
-              <div className="grid grid-cols-3 gap-2">
-                {['Laminado', 'Laminado Templado', 'Templado'].map((t) => {
-                  const disabled = t === 'Templado';
-                  const active = formData.tipo === t;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => !disabled && setFormData({ ...formData, tipo: t })}
-                      className={`p-3 rounded-lg text-left transition-all border-2 ${
-                        active ? 'bg-blue-100 border-blue-500' : 'bg-white border-gray-200 hover:border-blue-300'
-                      } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                      disabled={disabled}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium text-sm">{t}</div>
-                        {disabled && (
-                          <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-                            Próximamente
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {tiposDisp.map((tipo) => (
+                  <button
+                    key={tipo}
+                    onClick={() => setFormData({ ...formData, tipoVidrio: tipo })}
+                    className={`p-3 rounded-lg text-left transition-all ${
+                      formData.tipoVidrio === tipo
+                        ? 'bg-blue-100 border-2 border-blue-500'
+                        : 'bg-white border-2 border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="font-medium text-sm">{tipo}</div>
+                    <div className="text-xs text-gray-500">Desde BD</div>
+                  </button>
+                ))}
               </div>
             </div>
 
+            {/* Especificaciones */}
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="font-semibold text-gray-800 mb-3">📋 Especificaciones</h3>
-
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Proveedor</label>
@@ -625,34 +445,19 @@ export default function CalculadorVidrios() {
                     onChange={(e) => setFormData({ ...formData, proveedor: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {proveedoresDisponibles.map((p) => (
-                      <option key={p} value={p}>
-                        {p}
-                      </option>
-                    ))}
-                    {proveedoresProx.length > 0 && (
-                      <optgroup label="Próximamente (sin precios)">
-                        {proveedoresProx.map((p) => (
-                          <option key={p} value={p} disabled>
-                            {p} · Próximamente
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
+                    {proveedoresDisp.map((p) => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Espesor</label>
                   <select
-                    value={formData.espesor_mm}
-                    onChange={(e) => setFormData({ ...formData, espesor_mm: e.target.value })}
+                    value={formData.espesor}
+                    onChange={(e) => setFormData({ ...formData, espesor: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {espesores.length === 0 ? <option value="">—</option> : espesores.map((e) => <option key={e} value={e}>{e} mm</option>)}
+                    {espesoresDisp.map((e) => <option key={e} value={e}>{e}</option>)}
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs text-gray-600 mb-1">Acabado</label>
                   <select
@@ -660,21 +465,13 @@ export default function CalculadorVidrios() {
                     onChange={(e) => setFormData({ ...formData, acabado: e.target.value })}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    {acabados.length === 0 ? <option value="">—</option> : acabados.map((a) => <option key={a} value={a}>{a}</option>)}
+                    {acabadosDisp.map((a) => <option key={a} value={a}>{a}</option>)}
                   </select>
                 </div>
               </div>
-
-              <div className="mt-3 text-xs text-gray-500 flex items-center justify-between">
-                <span>
-                  Precio/m²: <span className="font-semibold text-gray-700">{precioM2 ? Number(precioM2).toFixed(2) : '—'}</span>
-                </span>
-                <span className={`${canAdd ? 'text-emerald-700' : 'text-gray-500'}`}>
-                  {canAdd ? 'Combinación válida' : 'Completa campos / sin precio'}
-                </span>
-              </div>
             </div>
 
+            {/* Forma + Extras (mañana conectamos operaciones reales) */}
             <div className="bg-gray-50 p-4 rounded-lg space-y-3">
               <h3 className="font-semibold text-gray-800">🧰 Forma y Extras</h3>
 
@@ -695,43 +492,65 @@ export default function CalculadorVidrios() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={formData.cantos} onChange={(e) => setFormData({ ...formData, cantos: e.target.checked })} />
-                  <span className="text-sm">Cantos pulidos</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.cantos}
+                    onChange={(e) => setFormData({ ...formData, cantos: e.target.checked })}
+                  />
+                  <span className="text-sm">Cantos</span>
                 </label>
 
                 <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={formData.puntas} onChange={(e) => setFormData({ ...formData, puntas: e.target.checked })} />
-                  <span className="text-sm">Puntas roma (4/pieza)</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.puntas}
+                    onChange={(e) => setFormData({ ...formData, puntas: e.target.checked })}
+                  />
+                  <span className="text-sm">Puntas roma</span>
                 </label>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
                 <div className="text-sm font-medium">Taladros:</div>
-                <input type="number" min="0" value={formData.taladros} onChange={(e) => setFormData({ ...formData, taladros: e.target.value })} className="w-20 px-2 py-1 border rounded" />
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.taladros}
+                  onChange={(e) => setFormData({ ...formData, taladros: e.target.value })}
+                  className="w-20 px-2 py-1 border rounded"
+                />
                 <div className="text-sm">Diámetro (mm)</div>
-                <input type="number" min="10" value={formData.diametroTaladro} onChange={(e) => setFormData({ ...formData, diametroTaladro: e.target.value })} className="w-24 px-2 py-1 border rounded" />
+                <input
+                  type="number"
+                  min="10"
+                  value={formData.diametroTaladro}
+                  onChange={(e) => setFormData({ ...formData, diametroTaladro: e.target.value })}
+                  className="w-24 px-2 py-1 border rounded"
+                />
               </div>
             </div>
 
+            {/* Botones */}
             <div className="flex flex-wrap gap-2">
-              <button onClick={calcular} disabled={templadoProximamente} className="px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50">
+              <button onClick={calcular} className="px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold">
                 Calcular
               </button>
-
-              <button onClick={addToList} disabled={!canAdd} className="px-4 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50">
-                + Añadir otro vidrio
+              <button onClick={addToList} className="px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold">
+                Añadir este vidrio a la lista
               </button>
-
+              <button onClick={updateSelected} className="px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">
+                Actualizar vidrio seleccionado
+              </button>
               <button onClick={limpiar} className="px-4 py-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold">
                 Limpiar
               </button>
             </div>
 
+            {/* Resultado */}
             <div>
               {resultado ? (
                 <div className="bg-gray-50 rounded-lg p-6">
                   <h3 className="font-bold text-lg mb-4">Resumen (vidrio actual)</h3>
-
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between"><span>Medidas:</span><span>{resultado.medidas}</span></div>
                     <div className="flex justify-between"><span>Cantidad:</span><span>{resultado.cantidad}</span></div>
@@ -739,37 +558,23 @@ export default function CalculadorVidrios() {
                     <div className="flex justify-between"><span>m² total:</span><span>{resultado.m2Total.toFixed(3)} m²</span></div>
                     <div className="flex justify-between"><span>Precio/m²:</span><span>{resultado.precioM2.toFixed(2)} €</span></div>
                     <div className="flex justify-between"><span>Base:</span><span>{resultado.precioBase.toFixed(2)} €</span></div>
-
-                    {resultado.extras?.length > 0 && (
-                      <div className="border-t pt-2">
-                        <div className="font-semibold mb-1">Extras</div>
-                        <div className="space-y-1">
-                          {resultado.extras.map((ex, i) => (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span>{ex.nombre} <span className="text-gray-500">({ex.detalle})</span></span>
-                              <span>{Number(ex.precio).toFixed(2)} €</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex justify-between text-sm mt-2"><span>Total extras:</span><span>{resultado.totalExtras.toFixed(2)} €</span></div>
-                      </div>
-                    )}
-
                     <div className="flex justify-between border-t pt-2"><span>Subtotal:</span><span>{resultado.subtotal.toFixed(2)} €</span></div>
                     <div className="flex justify-between text-gray-500"><span>IVA (21%):</span><span>{resultado.iva.toFixed(2)} €</span></div>
                   </div>
-
                   <div className="mt-4 bg-blue-600 text-white rounded-lg p-4 flex justify-between">
                     <span className="font-bold">TOTAL:</span>
                     <span className="text-xl font-bold">{resultado.total.toFixed(2)} €</span>
                   </div>
                 </div>
               ) : (
-                <div className="bg-gray-50 rounded-lg p-6 text-center text-gray-400">Introduce los datos y pulsa Calcular</div>
+                <div className="bg-gray-50 rounded-lg p-6 text-center text-gray-400">
+                  Introduce los datos y pulsa Calcular
+                </div>
               )}
             </div>
           </div>
 
+          {/* LISTA */}
           <div className="space-y-3">
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center justify-between mb-2">
@@ -800,11 +605,7 @@ export default function CalculadorVidrios() {
                         </button>
                       </div>
                       <div className="text-xs text-gray-600 mt-1">
-                        {it.resultado ? (
-                          <>Subtotal: {it.resultado.subtotal.toFixed(2)} € · Total: {it.resultado.total.toFixed(2)} €</>
-                        ) : (
-                          'Pendiente de cálculo'
-                        )}
+                        Subtotal: {it.resultado?.subtotal?.toFixed(2)} € · Total: {it.resultado?.total?.toFixed(2)} €
                       </div>
                     </div>
                   ))}
