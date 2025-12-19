@@ -22,7 +22,11 @@ export default function AdminPanel() {
   // 🔴 CONFIGURACIÓN ÚNICA (NO SE TOCA MÁS)
   const BUCKET = 'tarifas';
   const FILE_NAME = 'TARIFA_MASTER.xlsx';
-  const STORAGE_PATH = `${BUCKET}/${FILE_NAME}`;
+
+  // ✅ IMPORTANTE:
+  // En Supabase Storage, el "path" es RELATIVO al bucket.
+  // Si subes con .from(BUCKET).upload(FILE_NAME, ...), el path es FILE_NAME.
+  const STORAGE_PATH = FILE_NAME;
 
   const uploadAndImportExcel = async (file) => {
     setBusy(true);
@@ -37,7 +41,7 @@ export default function AdminPanel() {
         .upload(FILE_NAME, file, {
           upsert: true,
           contentType:
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         });
 
       if (uploadError) throw uploadError;
@@ -51,32 +55,81 @@ export default function AdminPanel() {
         'import_tarifa_master',
         {
           body: {
-            path: STORAGE_PATH
-          }
+            // ✅ pasamos bucket + path correcto
+            bucket: BUCKET,
+            path: STORAGE_PATH,
+          },
         }
       );
 
       if (fnError) throw fnError;
 
-      if (!data?.ok) {
-        throw new Error(data?.error || 'Error desconocido en la importación');
+      // ✅ Defensa: si no hay data, no sigas (evita undefined.proveedores)
+      if (!data) {
+        throw new Error('La Edge Function no devolvió datos (data es null/undefined).');
+      }
+
+      // ✅ Soporta varios formatos de respuesta:
+      // - nuevo: data.proveedores / data.vidrios / data.operaciones
+      // - wrapper: data.data.proveedores (si el backend mete un "data" interno)
+      // - legacy: data.result.proveedores / data.result.tarifas_vidrios / data.result.operaciones_vidrios
+      const proveedores =
+        data.proveedores ?? data?.data?.proveedores ?? data?.result?.proveedores;
+      const tarifasVidrios =
+        data.vidrios ?? data?.data?.vidrios ?? data?.result?.tarifas_vidrios;
+      const operaciones =
+        data.operaciones ?? data?.data?.operaciones ?? data?.result?.operaciones_vidrios;
+
+      const ok = data.ok ?? data.success ?? true;
+
+      if (!ok) {
+        throw new Error(data.error || data.message || 'Error desconocido en la importación');
+      }
+
+      // ✅ Si aún no tenemos "proveedores", es que el backend no está devolviendo el shape esperado
+      if (!proveedores) {
+        // mostramos el JSON para depurar sin petar la UI
+        setLog(
+          `⚠️ La importación respondió, pero falta el campo "proveedores".\n\nRespuesta:\n${JSON.stringify(
+            data,
+            null,
+            2
+          )}`
+        );
+        return;
       }
 
       /* =========================
-         3️⃣ OK
+         3️⃣ OK (LOG ROBUSTO)
       ========================= */
+      const provInserted = proveedores?.inserted ?? proveedores?.upserted ?? 0;
+
+      // tarifas vidrios puede venir como {upserted} o summary {inserted/updated}
+      const vidUpserted =
+        tarifasVidrios?.upserted ??
+        (tarifasVidrios
+          ? (tarifasVidrios.inserted ?? 0) + (tarifasVidrios.updated ?? 0)
+          : 0);
+
+      const opUpserted =
+        operaciones?.upserted ??
+        (operaciones
+          ? (operaciones.inserted ?? 0) + (operaciones.updated ?? 0)
+          : 0);
+
       setLog(
         `✅ IMPORTACIÓN COMPLETA
 
-Proveedores: ${data.result.proveedores.inserted}
-Tarifas vidrios: ${data.result.tarifas_vidrios.upserted}
-Operaciones: ${data.result.operaciones_vidrios.upserted}
+Proveedores: ${provInserted}
+Tarifas vidrios: ${vidUpserted}
+Operaciones: ${opUpserted}
 
-El sistema se ha actualizado automáticamente.`
+Mensaje: ${data.message ?? 'OK'}
+`
       );
     } catch (e) {
       console.error(e);
-      setLog(`❌ ERROR: ${e.message || e}`);
+      setLog(`❌ ERROR: ${e?.message || e}`);
     } finally {
       setBusy(false);
     }
