@@ -15,80 +15,65 @@ function TabButton({ active, children, onClick }) {
 }
 
 export default function AdminPanel() {
-  const [tab, setTab] = useState('vidrios'); // vidrios | operaciones | otros
+  const [tab, setTab] = useState('vidrios');
   const [log, setLog] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const uploadTarifasVidrios = async (file) => {
+  // 🔴 CONFIGURACIÓN ÚNICA (NO SE TOCA MÁS)
+  const BUCKET = 'tarifas';
+  const FILE_NAME = 'TARIFA_MASTER.xlsx';
+  const STORAGE_PATH = `${BUCKET}/${FILE_NAME}`;
+
+  const uploadAndImportExcel = async (file) => {
     setBusy(true);
-    setLog('Leyendo Excel...');
+    setLog('📤 Subiendo Excel a Storage...');
 
     try {
-      const XLSX = await import('xlsx');
+      /* =========================
+         1️⃣ SUBIR A STORAGE
+      ========================= */
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET)
+        .upload(FILE_NAME, file, {
+          upsert: true,
+          contentType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
 
-      const buf = await file.arrayBuffer();
-      const wb = XLSX.read(buf, { type: 'array' });
+      if (uploadError) throw uploadError;
 
-      // Si tu Excel tiene hojas con nombre específico, aquí lo elegiremos.
-      // Por ahora: primera hoja.
-      const sheetName = wb.SheetNames[0];
-      const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      setLog('📦 Excel subido. Importando datos en la base de datos...');
 
-      if (!rows.length) {
-        setLog('Excel vacío o hoja sin datos.');
-        return;
-      }
-
-      const norm = (s) => String(s || '').trim().toLowerCase();
-
-      const pick = (obj, keys) => {
-        const map = Object.keys(obj).reduce((acc, k) => {
-          acc[norm(k)] = obj[k];
-          return acc;
-        }, {});
-        for (const k of keys) {
-          const v = map[norm(k)];
-          if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+      /* =========================
+         2️⃣ LLAMAR EDGE FUNCTION
+      ========================= */
+      const { data, error: fnError } = await supabase.functions.invoke(
+        'import_tarifa_master',
+        {
+          body: {
+            path: STORAGE_PATH
+          }
         }
-        return '';
-      };
+      );
 
-      // Mapping flexible (para sobrevivir a headers raros)
-      const payload = rows.map((r, i) => {
-        const proveedor = pick(r, ['proveedor', 'supplier', 'prov']);
-        const tipo = pick(r, ['tipo', 'type']);
-        const espesor = pick(r, ['espesor_mm', 'espesor', 'espesor (mm)', 'vidrio', 'composición', 'composicion']);
-        const acabado = pick(r, ['acabado', 'color', 'acabado/color', 'finish']);
-        const precio = pick(r, ['precio_m2', 'precio', '€/m2', 'eur/m2', 'precio m2', 'pvp m2']);
+      if (fnError) throw fnError;
 
-        const espesor_mm = String(espesor).replace(/\s*mm\s*$/i, '').trim();
-        const precio_m2 = Number(String(precio).replace(',', '.'));
-
-        return {
-          fuente: file.name,
-          hoja: sheetName,
-          fila: i + 2,
-          proveedor: String(proveedor).trim(),
-          tipo: String(tipo).trim(),
-          espesor_mm,
-          acabado: String(acabado).trim(),
-          precio_m2: Number.isFinite(precio_m2) ? precio_m2 : null,
-        };
-      });
-
-      const valid = payload.filter((p) => p.proveedor && p.tipo && p.espesor_mm && p.acabado && p.precio_m2 !== null);
-
-      setLog(`Filas leídas: ${rows.length}. Filas válidas: ${valid.length}. Subiendo a tarifas_vidrios_raw...`);
-
-      const batchSize = 500;
-      for (let i = 0; i < valid.length; i += batchSize) {
-        const batch = valid.slice(i, i + batchSize);
-        const { error } = await supabase.from('tarifas_vidrios_raw').insert(batch);
-        if (error) throw error;
+      if (!data?.ok) {
+        throw new Error(data?.error || 'Error desconocido en la importación');
       }
 
-      setLog(`✅ OK: Importadas ${valid.length} filas a tarifas_vidrios_raw (fuente: ${file.name}).`);
+      /* =========================
+         3️⃣ OK
+      ========================= */
+      setLog(
+        `✅ IMPORTACIÓN COMPLETA
+
+Proveedores: ${data.result.proveedores.inserted}
+Tarifas vidrios: ${data.result.tarifas_vidrios.upserted}
+Operaciones: ${data.result.operaciones_vidrios.upserted}
+
+El sistema se ha actualizado automáticamente.`
+      );
     } catch (e) {
       console.error(e);
       setLog(`❌ ERROR: ${e.message || e}`);
@@ -101,15 +86,20 @@ export default function AdminPanel() {
     <div className="bg-white rounded-xl shadow-sm border p-6 space-y-6">
       <div>
         <h2 className="text-xl font-bold text-slate-800">Panel Admin</h2>
-        <p className="text-sm text-gray-500">Carga y gestión de tarifas y reglas</p>
+        <p className="text-sm text-gray-500">
+          Gestión de tarifas, reglas y escalado automático
+        </p>
       </div>
 
       <div className="flex gap-2">
         <TabButton active={tab === 'vidrios'} onClick={() => setTab('vidrios')}>
           Tarifas Vidrios
         </TabButton>
-        <TabButton active={tab === 'operaciones'} onClick={() => setTab('operaciones')}>
-          Operaciones/Reglas
+        <TabButton
+          active={tab === 'operaciones'}
+          onClick={() => setTab('operaciones')}
+        >
+          Operaciones / Reglas
         </TabButton>
         <TabButton active={tab === 'otros'} onClick={() => setTab('otros')}>
           Otros
@@ -119,10 +109,18 @@ export default function AdminPanel() {
       {tab === 'vidrios' && (
         <div className="space-y-4">
           <div className="bg-slate-50 border rounded-xl p-4">
-            <div className="font-semibold text-slate-800">Subir Excel de tarifas de vidrios</div>
+            <div className="font-semibold text-slate-800">
+              Subir Excel TARIFA MASTER
+            </div>
             <div className="text-sm text-gray-600 mt-1">
-              Esto carga a <code className="px-1 bg-white border rounded">tarifas_vidrios_raw</code>.
-              Luego validamos y pasamos a <code className="px-1 bg-white border rounded">tarifas_vidrios</code>.
+              Subes el Excel y el sistema:
+              <ul className="list-disc ml-6 mt-1">
+                <li>Lo guarda en Supabase</li>
+                <li>Importa proveedores</li>
+                <li>Importa tarifas de vidrios</li>
+                <li>Importa operaciones</li>
+                <li>Actualiza automáticamente los combos</li>
+              </ul>
             </div>
 
             <div className="mt-4">
@@ -132,20 +130,28 @@ export default function AdminPanel() {
                 disabled={busy}
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) uploadTarifasVidrios(f);
+                  if (f) uploadAndImportExcel(f);
                 }}
               />
-              {busy && <div className="text-xs text-gray-500 mt-2">Procesando...</div>}
+              {busy && (
+                <div className="text-xs text-gray-500 mt-2">
+                  Procesando… no cierres esta pantalla
+                </div>
+              )}
             </div>
           </div>
 
-          {log && <div className="text-sm p-3 rounded-lg bg-white border">{log}</div>}
+          {log && (
+            <pre className="text-sm p-4 rounded-lg bg-white border whitespace-pre-wrap">
+              {log}
+            </pre>
+          )}
         </div>
       )}
 
       {tab === 'operaciones' && (
         <div className="bg-slate-50 border rounded-xl p-4 text-sm text-gray-700">
-          Aquí irá la carga del “archivo escrito” de reglas/operaciones (siguiente paso).
+          Aquí más adelante podrás gestionar reglas avanzadas sin Excel.
         </div>
       )}
 
