@@ -176,12 +176,29 @@ async function upsertOperacionesVidrios(rows: Json[]) {
   return { upserted: payload.length };
 }
 
+const corsHeaders: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "content-type": "application/json" },
+  });
+}
+
 serve(async (req) => {
+  // Preflight CORS
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
   try {
     const body = await req.json().catch(() => ({}));
-    const path = body?.path as string | undefined;
+    const path = (body as any)?.path as string | undefined;
+
     if (!path) {
-      return new Response(JSON.stringify({ error: "Falta body.path" }), { status: 400 });
+      return json({ ok: false, error: "Falta body.path" }, 400);
     }
 
     const file = await downloadXlsxFromStorage(path);
@@ -192,40 +209,55 @@ serve(async (req) => {
     const sheetOps = findSheet(wb, ["OPERACIONES_VIDRIOS", "Operaciones_vidrios", "OPERACIONES", "Operaciones"]);
 
     if (!sheetProveedores || !sheetTarifas || !sheetOps) {
-      return new Response(
-        JSON.stringify({
-          error: "No encuentro pestañas esperadas",
-          found: wb.SheetNames,
-          expected: {
-            proveedores: ["PROVEEDORES"],
-            tarifas: ["VIDRIOS_TODOS"],
-            operaciones: ["OPERACIONES_VIDRIOS"],
+      return json(
+        {
+          ok: false,
+          error: "Faltan pestañas requeridas en el Excel",
+          missing: {
+            PROVEEDORES: !sheetProveedores,
+            VIDRIOS_TODOS: !sheetTarifas,
+            OPERACIONES_VIDRIOS: !sheetOps,
           },
-        }),
-        { status: 400 },
+          found: wb.SheetNames,
+        },
+        400,
       );
     }
 
-    const proveedoresRows = sheetToRows(wb, sheetProveedores);
-    const tarifasRows = sheetToRows(wb, sheetTarifas);
-    const opsRows = sheetToRows(wb, sheetOps);
+    const rowsProveedores = sheetToJson(wb, sheetProveedores);
+    const rowsTarifas = sheetToJson(wb, sheetTarifas);
+    const rowsOps = sheetToJson(wb, sheetOps);
 
-    const r1 = await upsertProveedores(proveedoresRows);
-    const r2 = await upsertTarifasVidrios(tarifasRows);
-    const r3 = await upsertOperacionesVidrios(opsRows);
+    const r1 = await upsertProveedores(rowsProveedores);
+    const r2 = await upsertTarifasVidrios(rowsTarifas);
+    const r3 = await upsertOperacionesVidrios(rowsOps);
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        sheets: { sheetProveedores, sheetTarifas, sheetOps },
-        result: { proveedores: r1, tarifas_vidrios: r2, operaciones_vidrios: r3 },
-      }),
-      { headers: { "content-type": "application/json" } },
-    );
-  } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String((e as any)?.message ?? e) }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
+    // Payload canónico que espera el Panel Admin
+    const canonical = {
+      proveedores: r1,
+      vidrios: r2,
+      operaciones: r3,
+      combos: { updated: 0, errors: [] as string[] },
+      warnings: [] as string[],
+      sheets: { sheetProveedores, sheetTarifas, sheetOps },
+    };
+
+    // Compatibilidad: algunos frontends miran `.data.*`, otros miran claves a nivel raíz,
+    // y otros miran `result.tarifas_vidrios` (legacy).
+    return json({
+      ok: true,
+      success: true,
+      message: "Import procesado",
+      ...canonical,
+      data: canonical,
+      result: {
+        proveedores: r1,
+        tarifas_vidrios: r2,
+        operaciones_vidrios: r3,
+      },
     });
+  } catch (e) {
+    return json({ ok: false, error: String((e as any)?.message ?? e) }, 500);
   }
 });
+
