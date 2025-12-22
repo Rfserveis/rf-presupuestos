@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 // Helpers
-const uniq = (arr) => Array.from(new Set(arr.filter(Boolean)));
+const uniq = (arr) => Array.from(new Set((arr ?? []).filter((v) => v !== null && v !== undefined && String(v).trim() !== '')));
 
 export async function getTiposVidrio({ categoria }) {
   const { data, error } = await supabase
@@ -29,6 +29,8 @@ export async function getProveedoresVidrio({ categoria, tipo }) {
 /**
  * ✅ Devuelve opciones para el select:
  * [{ value: 20, label: "10+10" }, { value: 16, label: "8+8" }, ...]
+ *
+ * Requiere que exista tarifas_vidrios.espesor_label (o si no, usa espesor_mm como label).
  */
 export async function getEspesoresVidrio({ categoria, tipo, proveedor }) {
   const { data, error } = await supabase
@@ -43,12 +45,12 @@ export async function getEspesoresVidrio({ categoria, tipo, proveedor }) {
 
   if (error) throw error;
 
+  // Dedupe por espesor_mm
   const map = new Map();
   for (const r of data ?? []) {
     const v = r.espesor_mm;
-    if (v == null) continue;
+    if (v === null || v === undefined) continue;
 
-    // Evitar duplicados por espesor_mm
     if (!map.has(v)) {
       map.set(v, {
         value: v,
@@ -56,6 +58,7 @@ export async function getEspesoresVidrio({ categoria, tipo, proveedor }) {
       });
     }
   }
+
   return Array.from(map.values());
 }
 
