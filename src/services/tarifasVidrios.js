@@ -1,7 +1,14 @@
 import { supabase } from './supabase';
 
-// Helpers
-const uniq = (arr) => Array.from(new Set((arr ?? []).filter((v) => v !== null && v !== undefined && String(v).trim() !== '')));
+// Utils
+const uniq = (arr) =>
+  Array.from(
+    new Set(
+      (arr ?? []).filter(
+        (v) => v !== null && v !== undefined && String(v).trim() !== ''
+      )
+    )
+  );
 
 export async function getTiposVidrio({ categoria }) {
   const { data, error } = await supabase
@@ -27,10 +34,11 @@ export async function getProveedoresVidrio({ categoria, tipo }) {
 }
 
 /**
- * ✅ Devuelve opciones para el select:
- * [{ value: 20, label: "10+10" }, { value: 16, label: "8+8" }, ...]
- *
- * Requiere que exista tarifas_vidrios.espesor_label (o si no, usa espesor_mm como label).
+ * 👉 DEVUELVE:
+ * [
+ *   { value: 20, label: "10+10" },
+ *   { value: 16, label: "8+8" }
+ * ]
  */
 export async function getEspesoresVidrio({ categoria, tipo, proveedor }) {
   const { data, error } = await supabase
@@ -45,16 +53,16 @@ export async function getEspesoresVidrio({ categoria, tipo, proveedor }) {
 
   if (error) throw error;
 
-  // Dedupe por espesor_mm
   const map = new Map();
+
   for (const r of data ?? []) {
     const v = r.espesor_mm;
-    if (v === null || v === undefined) continue;
+    if (v == null) continue;
 
     if (!map.has(v)) {
       map.set(v, {
         value: v,
-        label: r.espesor_label ?? String(v),
+        label: r.espesor_label ?? String(v)
       });
     }
   }
@@ -62,7 +70,12 @@ export async function getEspesoresVidrio({ categoria, tipo, proveedor }) {
   return Array.from(map.values());
 }
 
-export async function getAcabadosVidrio({ categoria, tipo, proveedor, espesor_mm }) {
+export async function getAcabadosVidrio({
+  categoria,
+  tipo,
+  proveedor,
+  espesor_mm
+}) {
   const esp = Number(espesor_mm);
 
   const { data, error } = await supabase
@@ -78,7 +91,13 @@ export async function getAcabadosVidrio({ categoria, tipo, proveedor, espesor_mm
   return uniq((data ?? []).map((r) => r.acabado)).sort();
 }
 
-export async function getPrecioM2Vidrio({ categoria, tipo, proveedor, espesor_mm, acabado }) {
+export async function getPrecioM2Vidrio({
+  categoria,
+  tipo,
+  proveedor,
+  espesor_mm,
+  acabado
+}) {
   const esp = Number(espesor_mm);
 
   const { data, error } = await supabase
